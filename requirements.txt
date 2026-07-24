@@ -1,0 +1,6 @@
+yfinance
+numpy
+pandas
+pytz
+scikit-learn
+google-generativeai
