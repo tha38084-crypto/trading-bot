@@ -1,0 +1,16 @@
+# Local Environment & Secrets
+.env
+*.key
+*.secret
+adaptive_balance.json
+adaptive_trade_history.json
+adaptive_learning_log.json
+adaptive_rules.json
+adaptive_sent_signals.json
+active_trades.json
+trade_history.json
+
+# Python Cache
+__pycache__/
+*.pyc
+.pytest_cache/

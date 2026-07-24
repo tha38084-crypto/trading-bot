@@ -1,0 +1,62 @@
+[
+  {
+    "symbol": "GBPUSD=X",
+    "name": "GBP/USD",
+    "type": "SELL",
+    "entry_price": 1.3325693607330322,
+    "sl_price": 1.3325693607330322,
+    "tp1_price": 1.3311068704996802,
+    "tp2_price": 1.3274506449163004,
+    "risk_dollar": 3.0,
+    "tp1_hit": true,
+    "realized_pnl": 1.5,
+    "ai_score": 68,
+    "tier": "GOLD (A)",
+    "conditions": {
+      "pair": "GBP/USD",
+      "action": "SELL",
+      "rsi": 11.164831320416425,
+      "adx": 49.594982904109514,
+      "atr_r": 0.0009145804309515628,
+      "bbw": 0.005486373203350161,
+      "hour": 15,
+      "ema_r": 0.005990616966257571,
+      "regime": "TREND",
+      "tier": "GOLD (A)",
+      "ai_score": 68,
+      "ml_prob": 0.6261986651703203,
+      "macro": 4,
+      "patterns": "None"
+    }
+  },
+  {
+    "symbol": "USDCAD=X",
+    "name": "USD/CAD",
+    "type": "BUY",
+    "entry_price": 1.4112299680709839,
+    "sl_price": 1.4099506576976306,
+    "tp1_price": 1.4125092784443372,
+    "tp2_price": 1.415067899191044,
+    "risk_dollar": 2.015,
+    "tp1_hit": false,
+    "realized_pnl": 0.0,
+    "ai_score": 75,
+    "tier": "SILVER (B)",
+    "conditions": {
+      "pair": "USD/CAD",
+      "action": "BUY",
+      "rsi": 82.53127247713914,
+      "adx": 54.17884520446243,
+      "atr_r": 0.0007554346216841525,
+      "bbw": 0.003025289638332917,
+      "hour": 14,
+      "ema_r": 0.002315466447582338,
+      "regime": "TREND",
+      "tier": "SILVER (B)",
+      "ai_score": 75,
+      "ml_prob": 0.3619915047891247,
+      "macro": 2,
+      "patterns": "None"
+    }
+  }
+]

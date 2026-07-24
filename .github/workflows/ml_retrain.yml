@@ -1,14 +1,13 @@
-name: Plan B AI-Copilot Cloud Scanner
+name: Plan B AI-Copilot ML Auto-Retrain
 
 on:
   schedule:
-    # Runs every 30 minutes from 8 AM to 5 PM (UTC), Monday to Friday
-    # London Open (8-12 GMT) and New York Open (13-17 GMT)
-    - cron: '*/30 8-17 * * 1-5'
+    # Runs every Sunday at 12:00 PM (UTC) (7:00 PM Cambodia time)
+    - cron: '0 12 * * 0'
   workflow_dispatch:  # Allows manual run anytime from GitHub website
 
 jobs:
-  run-scanner:
+  run-ml-retrain:
     runs-on: ubuntu-latest
 
     steps:
@@ -26,18 +25,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install yfinance numpy pandas pytz scikit-learn google-generativeai
 
-      - name: Run Plan B Adaptive AI Scanner
+      - name: Run Plan B ML Retraining
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          python plan_b_adaptive.py
+          python plan_b_adaptive.py --retrain
 
-      - name: Persist Trade History & Self-Learning Memory
+      - name: Persist Updated ML Model & Learning Logs
         run: |
           git config --global user.name 'PlanB-Cloud-Bot'
           git config --global user.email 'bot@planb.ai'
-          git add adaptive_sent_signals.json adaptive_active_trades.json adaptive_trade_history.json adaptive_balance.json adaptive_learning_log.json adaptive_rules.json adaptive_confidence.json || true
-          git commit -m "Auto-update state & learning logs [skip ci]" || true
+          git add adaptive_learning_log.json adaptive_rules.json || true
+          git commit -m "Auto-retrain ML Model [skip ci]" || true
           git push || true
