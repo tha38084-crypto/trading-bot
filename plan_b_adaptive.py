@@ -103,11 +103,22 @@ print("=" * 90)
 # ============================================================
 # UTILITIES
 # ============================================================
+def get_cam_time():
+    return pd.Timestamp.now(tz="UTC").tz_convert("Asia/Phnom_Penh").strftime("%a %d %b %Y | %I:%M %p")
+
 def send_tg(text):
+    import hashlib
+    msg_hash = hashlib.md5(text.encode('utf-8')).hexdigest()
+    sent_msgs = load_json("adaptive_sent_msgs.json", [])
+    if msg_hash in sent_msgs:
+        return True
+    
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     data = urllib.parse.urlencode({"chat_id": CHAT_ID, "text": text}).encode()
     try:
         urllib.request.urlopen(urllib.request.Request(url, data=data), timeout=10)
+        sent_msgs.append(msg_hash)
+        save_json("adaptive_sent_msgs.json", sent_msgs[-100:])
         return True
     except Exception as e:
         print(f"  [TG] {e}")
@@ -558,10 +569,10 @@ for trade in active:
     if trade["type"]=="BUY":
         if hi>=tp1 and not trade.get("tp1_hit"):
             trade["tp1_hit"]=True; trade["sl_price"]=ep; trade["realized_pnl"]=r*0.5; bal+=r*0.5
-            send_tg(f"[TP1] {trade['name']} BUY +${r*0.5:.2f} locked!")
+            send_tg(f"✅ [TP1] {trade['name']} BUY | +${r*0.5:.2f}\n⏳ {get_cam_time()}")
         if hi>=tp2:
             pnl=trade.get("realized_pnl",0)+r*0.5*3.5; bal+=r*0.5*3.5
-            send_tg(f"[WIN] {trade['name']} BUY TP2! +${pnl:.2f}")
+            send_tg(f"✅ [WIN] {trade['name']} BUY TP2 | +${pnl:.2f}\n⏳ {get_cam_time()}")
             history.append({"symbol":sym,"name":trade["name"],"pnl":pnl,"result":"WIN"})
             learning_log.append({**trade.get("conditions",{}), "result":"WIN","pnl":pnl})
             conf_data = update_confidence(conf_data, {**trade.get("conditions",{}), "result":"WIN"})
@@ -569,10 +580,10 @@ for trade in active:
         elif lo<=trade["sl_price"]:
             if trade["sl_price"]>=ep:
                 pnl=trade.get("realized_pnl",0); result="BREAKEVEN"
-                send_tg(f"[BE] {trade['name']} BUY +${pnl:.2f}")
+                send_tg(f"🛡️ [BE] {trade['name']} BUY | +${pnl:.2f}\n⏳ {get_cam_time()}")
             else:
                 bal-=r; pnl=-r; result="LOSS"
-                send_tg(f"[SL] {trade['name']} BUY -${r:.2f}")
+                send_tg(f"❌ [SL] {trade['name']} BUY | -${r:.2f}\n⏳ {get_cam_time()}")
             history.append({"symbol":sym,"name":trade["name"],"pnl":pnl,"result":result})
             learning_log.append({**trade.get("conditions",{}), "result":result,"pnl":pnl})
             conf_data = update_confidence(conf_data, {**trade.get("conditions",{}), "result":result})
@@ -580,10 +591,10 @@ for trade in active:
     elif trade["type"]=="SELL":
         if lo<=tp1 and not trade.get("tp1_hit"):
             trade["tp1_hit"]=True; trade["sl_price"]=ep; trade["realized_pnl"]=r*0.5; bal+=r*0.5
-            send_tg(f"[TP1] {trade['name']} SELL +${r*0.5:.2f} locked!")
+            send_tg(f"✅ [TP1] {trade['name']} SELL | +${r*0.5:.2f}\n⏳ {get_cam_time()}")
         if lo<=tp2:
             pnl=trade.get("realized_pnl",0)+r*0.5*3.5; bal+=r*0.5*3.5
-            send_tg(f"[WIN] {trade['name']} SELL TP2! +${pnl:.2f}")
+            send_tg(f"✅ [WIN] {trade['name']} SELL TP2 | +${pnl:.2f}\n⏳ {get_cam_time()}")
             history.append({"symbol":sym,"name":trade["name"],"pnl":pnl,"result":"WIN"})
             learning_log.append({**trade.get("conditions",{}), "result":"WIN","pnl":pnl})
             conf_data = update_confidence(conf_data, {**trade.get("conditions",{}), "result":"WIN"})
@@ -591,10 +602,10 @@ for trade in active:
         elif hi>=trade["sl_price"]:
             if trade["sl_price"]<=ep:
                 pnl=trade.get("realized_pnl",0); result="BREAKEVEN"
-                send_tg(f"[BE] {trade['name']} SELL +${pnl:.2f}")
+                send_tg(f"🛡️ [BE] {trade['name']} SELL | +${pnl:.2f}\n⏳ {get_cam_time()}")
             else:
                 bal-=r; pnl=-r; result="LOSS"
-                send_tg(f"[SL] {trade['name']} SELL -${r:.2f}")
+                send_tg(f"❌ [SL] {trade['name']} SELL | -${r:.2f}\n⏳ {get_cam_time()}")
             history.append({"symbol":sym,"name":trade["name"],"pnl":pnl,"result":result})
             learning_log.append({**trade.get("conditions",{}), "result":result,"pnl":pnl})
             conf_data = update_confidence(conf_data, {**trade.get("conditions",{}), "result":result})
@@ -729,7 +740,7 @@ if not news_blocked and not circuit_tripped:
 PLAN B AI-COPILOT - {tier['label']} SIGNAL
 ==================================================
 Pair      : {asset['name']}  |  {action}  |  {scan['label']}
-Time      : {str(lt)} London
+Time      : {get_cam_time()}
 Regime    : {reg}  |  R/R: 1:{rr_ratio}
 --------------------------------------------------
 Entry     : {close:.5f}
@@ -739,16 +750,6 @@ TP2       : {tp2_p:.5f}  | +${reward:.2f} full!
 --------------------------------------------------
 🤖 GEMINI AI THESIS:
 "{thesis}"
---------------------------------------------------
-ADAPTIVE INTELLIGENCE REPORT:
-  AI Score      : {ai_score}/100
-  ML Win Prob   : {ml_txt}
-  Macro         : {mscore}/5 | {minfo}
-  Patterns      : {pat_txt}
-  S/R Zone      : {sr_txt}
-  SMC Sweep     : {'YES' if swept else 'No'}
-  Tier          : {tier['label']} (Risk x{final_risk_mult:.2f})
-  Learned Rules : {len(rules)} active
 =================================================="""
                 print(card)
                 if send_tg(card):
@@ -817,10 +818,10 @@ if "--heartbeat" in sys.argv:
     circuit_status = "\U0001F534 TRIPPED - Trading Paused" if circuit_tripped else "\U0001F7E2 OK - Trading Active"
     ai_status = "ACTIVE" if GEMINI_KEY else "OFFLINE"
     heartbeat_msg = (
-        f"\u2705 PLAN B HEARTBEAT - {now_cam.strftime('%A %d %b %Y %H:%M')} (Cambodia)\n"
+        f"✅ PLAN B HEARTBEAT - {get_cam_time()}\n"
         f"===================================================\n"
         f"Scanning  : {len(WATCHLIST)} assets | 21 Modules Active\n"
-        f"Data Feed : {data_status} \U0001F7E2\n"
+        f"Data Feed : {data_status} 🟢\n"
         f"Circuit   : {circuit_status}\n"
         f"---------------------------------------------------\n"
         f"Balance   : ${bal:,.2f} | Net All-Time: ${net_h:+.2f}\n"
@@ -828,7 +829,7 @@ if "--heartbeat" in sys.argv:
         f"Trades    : {tot_h} total | {wins_h}W {loss_h}L {bes_h}BE | WR: {wr_h:.1f}%\n"
         f"Open Now  : {len(active)} active trade(s)\n"
         f"AI Copilot: {ai_status}\n"
-        f"Bot Status: HEALTHY \U0001F916"
+        f"Bot Status: HEALTHY 🤖"
     )
     print(heartbeat_msg)
     send_tg(heartbeat_msg)
