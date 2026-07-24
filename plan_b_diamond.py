@@ -42,8 +42,8 @@ import pandas as pd
 import yfinance as yf
 import pytz
 
-BOT_TOKEN = "8805795541:AAGtovTXglTg22QjEV875FbVzXHvNOWI5Zc"
-CHAT_ID   = "5477873575"
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "")
 LONDON_TZ = pytz.timezone("Europe/London")
 
 # ============================================================

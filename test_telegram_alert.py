@@ -12,8 +12,8 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
     except Exception:
         pass
 
-BOT_TOKEN = "8805795541:AAGtovTXglTg22QjEV875FbVzXHvNOWI5Zc"
-CHAT_ID = "5477873575"
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 message_text = """
 =========================================

@@ -11,7 +11,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
     except Exception:
         pass
 
-BOT_TOKEN = "8805795541:AAGtovTXglTg22QjEV875FbVzXHvNOWI5Zc"
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates"
 
 print(f"[FETCHING] Contacting Telegram API to get your Chat ID...")

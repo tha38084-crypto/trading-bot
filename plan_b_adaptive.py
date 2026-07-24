@@ -25,14 +25,18 @@ import pandas as pd
 import yfinance as yf
 import pytz
 
-BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8805795541:AAGtovTXglTg22QjEV875FbVzXHvNOWI5Zc")
-CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "5477873575")
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", "")
 GEMINI_KEY= os.environ.get("GEMINI_API_KEY", "")
-if not GEMINI_KEY and os.path.exists(".env"):
+if os.path.exists(".env"):
     try:
         with open(".env") as f:
             for line in f:
-                if line.startswith("GEMINI_API_KEY="):
+                if line.startswith("TELEGRAM_BOT_TOKEN=") and not BOT_TOKEN:
+                    BOT_TOKEN = line.split("=", 1)[1].strip()
+                elif line.startswith("TELEGRAM_CHAT_ID=") and not CHAT_ID:
+                    CHAT_ID = line.split("=", 1)[1].strip()
+                elif line.startswith("GEMINI_API_KEY=") and not GEMINI_KEY:
                     GEMINI_KEY = line.split("=", 1)[1].strip()
     except Exception: pass
 LONDON_TZ = pytz.timezone("Europe/London")
