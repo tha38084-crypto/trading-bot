@@ -4,3 +4,4 @@ pandas
 pytz
 scikit-learn
 google-generativeai
+metaapi-cloud-sdk
