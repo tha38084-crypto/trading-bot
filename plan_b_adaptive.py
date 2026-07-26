@@ -103,6 +103,44 @@ print("=" * 90)
 # ============================================================
 # UTILITIES
 # ============================================================
+def auto_execute_mt5(sym, action, sl_p, tp_p):
+    try:
+        import MetaTrader5 as mt5
+        if not mt5.initialize(): return "MT5 Init Failed"
+        mt5_sym = sym.replace("-", "")
+        if not mt5.symbol_select(mt5_sym, True):
+            mt5.shutdown(); return f"{mt5_sym} Not Found"
+        
+        type_dict = {"BUY": mt5.ORDER_TYPE_BUY, "SELL": mt5.ORDER_TYPE_SELL}
+        order_type = type_dict.get(action)
+        price = mt5.symbol_info_tick(mt5_sym).ask if action=="BUY" else mt5.symbol_info_tick(mt5_sym).bid
+        
+        # Fixed 0.01 lot for safe demo forward-testing phase
+        request = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "symbol": mt5_sym,
+            "volume": 0.01,
+            "type": order_type,
+            "price": float(price),
+            "sl": float(sl_p),
+            "tp": float(tp_p),
+            "deviation": 20,
+            "magic": 234000,
+            "comment": "Plan B Auto",
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": mt5.ORDER_FILLING_IOC,
+        }
+        res = mt5.order_send(request)
+        if res.retcode != mt5.TRADE_RETCODE_DONE:
+            request["type_filling"] = mt5.ORDER_FILLING_FOK
+            res = mt5.order_send(request)
+            if res.retcode != mt5.TRADE_RETCODE_DONE:
+                mt5.shutdown(); return f"Failed: {res.comment}"
+        
+        mt5.shutdown(); return f"Success! Tkt #{res.order}"
+    except Exception as e:
+        return f"Error: {e}"
+
 def get_cam_time():
     return pd.Timestamp.now(tz="UTC").tz_convert("Asia/Phnom_Penh").strftime("%a %d %b %Y | %I:%M %p")
 
@@ -759,6 +797,11 @@ if not news_blocked and not circuit_tripped:
                     f"🤖 AI THESIS:\n"
                     f"\"{thesis}\""
                 )
+                
+                # Execute on MT5 First!
+                mt5_res = auto_execute_mt5(sym, action, sl_p, tp2_p)
+                card += f"\n\n⚡ MT5 EXECUTION: {mt5_res}"
+                
                 print(card)
                 if send_tg(card):
                     conditions = {"pair":asset["name"],"action":action,"rsi":rsi,"adx":adx,
