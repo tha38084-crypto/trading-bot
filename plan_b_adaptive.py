@@ -538,6 +538,18 @@ conf_data = load_json(CONFIDENCE_FILE, {})
 rules     = load_json(RULES_FILE, [])
 bal = bal_data.get("balance", INITIAL_BALANCE)
 
+# LIVE MT5 DIRECT CONNECTION (100% FREE)
+try:
+    import MetaTrader5 as mt5
+    if mt5.initialize():
+        acc_info = mt5.account_info()
+        if acc_info is not None and acc_info.balance > 0:
+            bal = float(acc_info.balance)
+            print(f"  [MT5 DIRECT] Live Broker Connection Active! Login: {acc_info.login} | Balance: ${bal:,.2f} {acc_info.currency}")
+        mt5.shutdown()
+except Exception:
+    pass
+
 rp, rl = get_risk(bal, history); rusd = bal * rp
 
 # RESULT TRACKER
