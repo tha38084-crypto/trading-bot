@@ -735,22 +735,16 @@ if not news_blocked and not circuit_tripped:
                 ml_txt = f"{ml_prob*100:.1f}%" if ml_prob else "N/A"
                 sr_txt = f"Near {sr_zone['strength']} zone" if sr_zone else "Standard"
 
-                card = f"""
-==================================================
-PLAN B AI-COPILOT - {tier['label']} SIGNAL
-==================================================
-Pair      : {asset['name']}  |  {action}  |  {scan['label']}
-Time      : {get_cam_time()}
-Regime    : {reg}  |  R/R: 1:{rr_ratio}
---------------------------------------------------
-Entry     : {close:.5f}
-Stop-Loss : {sl_p:.5f}  | Risk: -${trade_risk:.2f}
-TP1       : {tp1_p:.5f}  | +${trade_risk*0.5:.2f} (50% + SL->BE)
-TP2       : {tp2_p:.5f}  | +${reward:.2f} full!
---------------------------------------------------
-🤖 GEMINI AI THESIS:
-"{thesis}"
-=================================================="""
+                card = (
+                    f"🚨 PLAN B SIGNAL: {action} ({tier['label']})\n"
+                    f"Pair: {asset['name']} ({scan['label']})\n"
+                    f"Entry: {close:.5f}\n"
+                    f"Stop-Loss: {sl_p:.5f} (-${trade_risk:.2f})\n"
+                    f"TP1: {tp1_p:.5f} (+${trade_risk*0.5:.2f})\n"
+                    f"TP2: {tp2_p:.5f} (+${reward:.2f})\n\n"
+                    f"🤖 Gemini Thesis:\n\"{thesis}\"\n\n"
+                    f"⏳ {get_cam_time()}"
+                )
                 print(card)
                 if send_tg(card):
                     conditions = {"pair":asset["name"],"action":action,"rsi":rsi,"adx":adx,
@@ -771,8 +765,7 @@ TP2       : {tp2_p:.5f}  | +${reward:.2f} full!
 print(f"\n[SCAN] {sig_count} signal(s) fired | Active: {len(active)} | Learned Rules: {len(rules)}")
 
 # WEEKLY SUMMARY
-wday = pd.Timestamp.now(tz="UTC").tz_convert(LONDON_TZ).weekday()
-if wday == 6 or "--weekly-summary" in sys.argv:
+if "--weekly-summary" in sys.argv:
     df_h = pd.DataFrame(history); tot = len(df_h)
     if tot > 0:
         wins=df_h[df_h["result"]=="WIN"]; loss=df_h[df_h["result"]=="LOSS"]; bes=df_h[df_h["result"]=="BREAKEVEN"]
@@ -781,19 +774,13 @@ if wday == 6 or "--weekly-summary" in sys.argv:
         pf=gp/gl if gl>0 else gp
     else: wr=net=pf=0.0; wins=loss=bes=pd.DataFrame()
 
-    summary = f"""
-==================================================
-PLAN B AI-COPILOT - WEEKLY INTELLIGENCE REPORT
-==================================================
-Signals   : {tot} taken | {len(wins)}W {len(loss)}L {len(bes)}BE
-Win Rate  : {wr:.1f}%
-Balance   : ${bal:,.2f} | Net: ${net:+,.2f} ({(net/INITIAL_BALANCE)*100:+.1f}%)
-PF        : {pf:.2f}
---------------------------------------------------
-Monte Carlo: {mc['pp']:.1f}% profit prob | Ruin: {mc['ruin']:.3f}%
-AI Copilot : {'ACTIVE' if GEMINI_KEY else 'OFFLINE (Fallback Active)'}
-Modules    : 19 Active (E1-6 + D1-6 + A1-8)
-=================================================="""
+    summary = (
+        f"📊 PLAN B WEEKLY REPORT\n"
+        f"Signals: {tot} taken | {len(wins)}W {len(loss)}L {len(bes)}BE (WR: {wr:.1f}%)\n"
+        f"Balance: ${bal:,.2f} | Net: ${net:+,.2f}\n"
+        f"Profit Factor: {pf:.2f}\n"
+        f"⏳ {get_cam_time()}"
+    )
     print(summary); send_tg(summary)
 
 # ============================================================
@@ -815,21 +802,17 @@ if "--heartbeat" in sys.argv:
         _, w_bal = max(old_entries, key=lambda x: x[0])
         week_pnl_txt = f"${bal - w_bal:+.2f} ({((bal-w_bal)/w_bal*100):+.1f}% this week)"
     data_status = "ALL 15 OK" if len(WATCHLIST) == 15 else f"{len(WATCHLIST)}/15 assets"
-    circuit_status = "\U0001F534 TRIPPED - Trading Paused" if circuit_tripped else "\U0001F7E2 OK - Trading Active"
+    circuit_status = "🔴 TRIPPED" if circuit_tripped else "🟢 OK"
     ai_status = "ACTIVE" if GEMINI_KEY else "OFFLINE"
     heartbeat_msg = (
-        f"✅ PLAN B HEARTBEAT - {get_cam_time()}\n"
-        f"===================================================\n"
-        f"Scanning  : {len(WATCHLIST)} assets | 21 Modules Active\n"
-        f"Data Feed : {data_status} 🟢\n"
-        f"Circuit   : {circuit_status}\n"
-        f"---------------------------------------------------\n"
-        f"Balance   : ${bal:,.2f} | Net All-Time: ${net_h:+.2f}\n"
-        f"This Week : {week_pnl_txt}\n"
-        f"Trades    : {tot_h} total | {wins_h}W {loss_h}L {bes_h}BE | WR: {wr_h:.1f}%\n"
-        f"Open Now  : {len(active)} active trade(s)\n"
-        f"AI Copilot: {ai_status}\n"
-        f"Bot Status: HEALTHY 🤖"
+        f"✅ PLAN B HEARTBEAT\n"
+        f"⏳ {get_cam_time()}\n\n"
+        f"📊 Status: {data_status} 🟢\n"
+        f"🛡️ Circuit Breaker: {circuit_status}\n"
+        f"💰 Balance: ${bal:,.2f} (Net: ${net_h:+.2f})\n"
+        f"📈 Trades: {tot_h} Total | {wins_h}W {loss_h}L {bes_h}BE (WR: {wr_h:.1f}%)\n"
+        f"🔓 Open Trades: {len(active)} Active\n"
+        f"🤖 AI Copilot: {ai_status}"
     )
     print(heartbeat_msg)
     send_tg(heartbeat_msg)
