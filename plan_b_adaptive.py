@@ -569,10 +569,10 @@ for trade in active:
     if trade["type"]=="BUY":
         if hi>=tp1 and not trade.get("tp1_hit"):
             trade["tp1_hit"]=True; trade["sl_price"]=ep; trade["realized_pnl"]=r*0.5; bal+=r*0.5
-            send_tg(f"✅ [TP1] {trade['name']} BUY | +${r*0.5:.2f}\n⏳ {get_cam_time()}")
+            send_tg(f"✅ TRADE CLOSED: PROFIT LOCKED\n📅 {get_cam_time()} (Cambodia)\n------------------------------------\nPair    : {trade['name']} (BUY)\nResult  : +${r*0.5:.2f} (Locked at TP1)\nBalance : ${bal:,.2f} 🟢")
         if hi>=tp2:
             pnl=trade.get("realized_pnl",0)+r*0.5*3.5; bal+=r*0.5*3.5
-            send_tg(f"✅ [WIN] {trade['name']} BUY TP2 | +${pnl:.2f}\n⏳ {get_cam_time()}")
+            send_tg(f"✅ TRADE CLOSED: FULL WIN\n📅 {get_cam_time()} (Cambodia)\n------------------------------------\nPair    : {trade['name']} (BUY)\nResult  : +${pnl:.2f} (Full TP2)\nBalance : ${bal:,.2f} 🟢")
             history.append({"symbol":sym,"name":trade["name"],"pnl":pnl,"result":"WIN"})
             learning_log.append({**trade.get("conditions",{}), "result":"WIN","pnl":pnl})
             conf_data = update_confidence(conf_data, {**trade.get("conditions",{}), "result":"WIN"})
@@ -580,10 +580,10 @@ for trade in active:
         elif lo<=trade["sl_price"]:
             if trade["sl_price"]>=ep:
                 pnl=trade.get("realized_pnl",0); result="BREAKEVEN"
-                send_tg(f"🛡️ [BE] {trade['name']} BUY | +${pnl:.2f}\n⏳ {get_cam_time()}")
+                send_tg(f"🛡️ TRADE CLOSED: BREAKEVEN\n📅 {get_cam_time()} (Cambodia)\n------------------------------------\nPair    : {trade['name']} (BUY)\nResult  : +${pnl:.2f} (Breakeven)\nBalance : ${bal:,.2f} 🟢")
             else:
                 bal-=r; pnl=-r; result="LOSS"
-                send_tg(f"❌ [SL] {trade['name']} BUY | -${r:.2f}\n⏳ {get_cam_time()}")
+                send_tg(f"❌ TRADE CLOSED: STOP LOSS\n📅 {get_cam_time()} (Cambodia)\n------------------------------------\nPair    : {trade['name']} (BUY)\nResult  : -${r:.2f} (Stop Loss)\nBalance : ${bal:,.2f} 🔴")
             history.append({"symbol":sym,"name":trade["name"],"pnl":pnl,"result":result})
             learning_log.append({**trade.get("conditions",{}), "result":result,"pnl":pnl})
             conf_data = update_confidence(conf_data, {**trade.get("conditions",{}), "result":result})
@@ -591,10 +591,10 @@ for trade in active:
     elif trade["type"]=="SELL":
         if lo<=tp1 and not trade.get("tp1_hit"):
             trade["tp1_hit"]=True; trade["sl_price"]=ep; trade["realized_pnl"]=r*0.5; bal+=r*0.5
-            send_tg(f"✅ [TP1] {trade['name']} SELL | +${r*0.5:.2f}\n⏳ {get_cam_time()}")
+            send_tg(f"✅ TRADE CLOSED: PROFIT LOCKED\n📅 {get_cam_time()} (Cambodia)\n------------------------------------\nPair    : {trade['name']} (SELL)\nResult  : +${r*0.5:.2f} (Locked at TP1)\nBalance : ${bal:,.2f} 🟢")
         if lo<=tp2:
             pnl=trade.get("realized_pnl",0)+r*0.5*3.5; bal+=r*0.5*3.5
-            send_tg(f"✅ [WIN] {trade['name']} SELL TP2 | +${pnl:.2f}\n⏳ {get_cam_time()}")
+            send_tg(f"✅ TRADE CLOSED: FULL WIN\n📅 {get_cam_time()} (Cambodia)\n------------------------------------\nPair    : {trade['name']} (SELL)\nResult  : +${pnl:.2f} (Full TP2)\nBalance : ${bal:,.2f} 🟢")
             history.append({"symbol":sym,"name":trade["name"],"pnl":pnl,"result":"WIN"})
             learning_log.append({**trade.get("conditions",{}), "result":"WIN","pnl":pnl})
             conf_data = update_confidence(conf_data, {**trade.get("conditions",{}), "result":"WIN"})
@@ -602,10 +602,10 @@ for trade in active:
         elif hi>=trade["sl_price"]:
             if trade["sl_price"]<=ep:
                 pnl=trade.get("realized_pnl",0); result="BREAKEVEN"
-                send_tg(f"🛡️ [BE] {trade['name']} SELL | +${pnl:.2f}\n⏳ {get_cam_time()}")
+                send_tg(f"🛡️ TRADE CLOSED: BREAKEVEN\n📅 {get_cam_time()} (Cambodia)\n------------------------------------\nPair    : {trade['name']} (SELL)\nResult  : +${pnl:.2f} (Breakeven)\nBalance : ${bal:,.2f} 🟢")
             else:
                 bal-=r; pnl=-r; result="LOSS"
-                send_tg(f"❌ [SL] {trade['name']} SELL | -${r:.2f}\n⏳ {get_cam_time()}")
+                send_tg(f"❌ TRADE CLOSED: STOP LOSS\n📅 {get_cam_time()} (Cambodia)\n------------------------------------\nPair    : {trade['name']} (SELL)\nResult  : -${r:.2f} (Stop Loss)\nBalance : ${bal:,.2f} 🔴")
             history.append({"symbol":sym,"name":trade["name"],"pnl":pnl,"result":result})
             learning_log.append({**trade.get("conditions",{}), "result":result,"pnl":pnl})
             conf_data = update_confidence(conf_data, {**trade.get("conditions",{}), "result":result})
@@ -736,14 +736,16 @@ if not news_blocked and not circuit_tripped:
                 sr_txt = f"Near {sr_zone['strength']} zone" if sr_zone else "Standard"
 
                 card = (
-                    f"🚨 PLAN B SIGNAL: {action} ({tier['label']})\n"
-                    f"Pair: {asset['name']} ({scan['label']})\n"
-                    f"Entry: {close:.5f}\n"
-                    f"Stop-Loss: {sl_p:.5f} (-${trade_risk:.2f})\n"
-                    f"TP1: {tp1_p:.5f} (+${trade_risk*0.5:.2f})\n"
-                    f"TP2: {tp2_p:.5f} (+${reward:.2f})\n\n"
-                    f"🤖 Gemini Thesis:\n\"{thesis}\"\n\n"
-                    f"⏳ {get_cam_time()}"
+                    f"🚨 NEW SIGNAL: {asset['name']} ({action})\n"
+                    f"📅 {get_cam_time()} (Cambodia)\n"
+                    f"------------------------------------\n"
+                    f"Entry    : {close:.5f}\n"
+                    f"StopLoss : {sl_p:.5f} (-${trade_risk:.2f} Risk)\n"
+                    f"TP1      : {tp1_p:.5f} (+${trade_risk*0.5:.2f} & SL->BE)\n"
+                    f"TP2      : {tp2_p:.5f} (+${reward:.2f} Full win)\n"
+                    f"------------------------------------\n"
+                    f"🤖 AI THESIS:\n"
+                    f"\"{thesis}\""
                 )
                 print(card)
                 if send_tg(card):
@@ -805,14 +807,12 @@ if "--heartbeat" in sys.argv:
     circuit_status = "🔴 TRIPPED" if circuit_tripped else "🟢 OK"
     ai_status = "ACTIVE" if GEMINI_KEY else "OFFLINE"
     heartbeat_msg = (
-        f"✅ PLAN B HEARTBEAT\n"
-        f"⏳ {get_cam_time()}\n\n"
-        f"📊 Status: {data_status} 🟢\n"
-        f"🛡️ Circuit Breaker: {circuit_status}\n"
-        f"💰 Balance: ${bal:,.2f} (Net: ${net_h:+.2f})\n"
-        f"📈 Trades: {tot_h} Total | {wins_h}W {loss_h}L {bes_h}BE (WR: {wr_h:.1f}%)\n"
-        f"🔓 Open Trades: {len(active)} Active\n"
-        f"🤖 AI Copilot: {ai_status}"
+        f"🤖 DAILY BOT STATUS\n"
+        f"📅 {get_cam_time()} (Cambodia)\n"
+        f"------------------------------------\n"
+        f"Balance : ${bal:,.2f} (Net: ${net_h:+.2f})\n"
+        f"Trades  : {tot_h} Taken ({wins_h} Win, {loss_h} Loss)\n"
+        f"Status  : 15 Assets Active 🟢"
     )
     print(heartbeat_msg)
     send_tg(heartbeat_msg)
