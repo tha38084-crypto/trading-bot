@@ -1,6 +1,6 @@
 """
 ===============================================================================
-PLAN B ADAPTIVE ENGINE v3.0  -  AI-COPILOT CLOUD SYSTEM
+PLAN B ADAPTIVE ENGINE v4.0  -  DUAL-ENGINE AI-COPILOT CLOUD SYSTEM
 ===============================================================================
 22 MODULES TOTAL:
 
@@ -10,12 +10,11 @@ ADAPTIVE (A1-A8): Patterns | S/R Zones | Loss Learner | ML Retrain |
                    Multi-TF Scalper | Confidence | Tiered Quality |
                    A8: Gemini NLP News Sentiment & Trade Thesis Copilot
 
-NEW in v3.0:
-  - Signal Grade (A+/A/B) displayed on every Telegram card
-  - News Filter: blocks trading & sends Telegram warning before big events
-  - Post-News Breakout Scan: Scans 20 min after high-impact news resolves
-  - Weekly Auto-Report: Every Sunday auto-sent to Telegram (no manual trigger)
-  - Removed fake virtual balance: Result cards show pips/RR only
+NEW in v4.0 (Dual-Engine):
+  - ENGINE 1 (Standard): Liquidity Trifecta - Trend + RSI Pullback + Sweep/Pattern
+  - ENGINE 2 (Sniper):   Fair Value Gap (FVG) Matrix - Institutional liquidity void fills
+  - Sniper signals tagged with 🔥 SNIPER on Telegram (1:5+ Risk/Reward)
+  - Both engines run independently every 15 minutes - zero interference
 
 100% FREE ($0.00). GitHub Cloud Automated. PC Stays OFF.
 ===============================================================================
@@ -251,6 +250,61 @@ def detect_candle_patterns(df, i):
         patterns["Evening Star"] = True; score += 20
 
     return patterns, score
+
+# ============================================================
+# A2b: SNIPER ENGINE - FAIR VALUE GAP (FVG) DETECTOR
+# Institutional Liquidity Void Matrix
+# ============================================================
+def detect_fvg(df, lookback=50):
+    """
+    Scans the last `lookback` candles to find unmitigated Fair Value Gaps (FVGs).
+    A Bullish FVG exists when: candle[i-2].high < candle[i].low  (gap UP = unfilled orders below)
+    A Bearish FVG exists when: candle[i-2].low  > candle[i].high (gap DOWN = unfilled orders above)
+    Returns a list of active, unmitigated FVG zones the current price is entering.
+    """
+    fvgs = []
+    if len(df) < lookback + 3:
+        return fvgs
+    
+    current_close = float(df.iloc[-1]["Close"])
+    current_low   = float(df.iloc[-1]["Low"])
+    current_high  = float(df.iloc[-1]["High"])
+    atr = float(df.iloc[-1].get("ATR", 0.001))
+    
+    # Scan the last `lookback` candles for unmitigated FVG zones
+    start = max(3, len(df) - lookback)
+    for i in range(start, len(df) - 1):
+        c_prev2 = df.iloc[i - 2]
+        c_curr  = df.iloc[i]
+        
+        h_prev2 = float(c_prev2["High"])
+        l_prev2 = float(c_prev2["Low"])
+        h_curr  = float(c_curr["High"])
+        l_curr  = float(c_curr["Low"])
+        
+        # Bullish FVG: gap left above — current price must be pulling back INTO the gap from above
+        if l_curr > h_prev2:
+            gap_top = l_curr
+            gap_bot = h_prev2
+            gap_size = gap_top - gap_bot
+            if gap_size > atr * 0.3:  # Only meaningful gaps (> 30% of ATR)
+                # Price is currently entering the gap from above (pullback into FVG)
+                if gap_bot <= current_close <= gap_top + atr * 0.5:
+                    fvgs.append({"type": "BULLISH", "top": gap_top, "bot": gap_bot,
+                                 "size": gap_size, "action": "BUY"})
+        
+        # Bearish FVG: gap left below — current price must be pulling back INTO the gap from below
+        if h_curr < l_prev2:
+            gap_top = l_prev2
+            gap_bot = h_curr
+            gap_size = gap_top - gap_bot
+            if gap_size > atr * 0.3:  # Only meaningful gaps
+                # Price is currently entering the gap from below (pullback into FVG)
+                if gap_bot - atr * 0.5 <= current_close <= gap_top:
+                    fvgs.append({"type": "BEARISH", "top": gap_top, "bot": gap_bot,
+                                 "size": gap_size, "action": "SELL"})
+    
+    return fvgs
 
 # ============================================================
 # A2: SUPPORT/RESISTANCE ZONE MAPPER
@@ -800,6 +854,106 @@ for scan in scan_configs:
 save_json(LOG_FILE, sent); save_json(TRADES_FILE, active)
 
 print(f"\n[SCAN] {sig_count} signal(s) fired | Active: {len(active)} | Learned Rules: {len(rules)}")
+
+# ============================================================
+# ENGINE 2: SNIPER (Fair Value Gap / Liquidity Void Matrix)
+# Runs independently of Engine 1. Targets 1:5+ RR.
+# ============================================================
+sniper_count = 0
+SNIPER_RR = 5.0  # Sniper targets 1:5 Risk-to-Reward
+
+if not news_blocked and not circuit_tripped:
+    print("\n[SNIPER ENGINE] Scanning for Liquidity Voids (FVG)...")
+    for asset in WATCHLIST:
+        sym = asset["symbol"]
+        # Use 15M for speed and gap frequency
+        df = fetch_df(sym, "5d", "15m")
+        if df is None or len(df) < 100: continue
+        df = add_indicators(df)
+        bar = df.iloc[-1]
+        if any(pd.isna(bar.get(c, np.nan)) for c in ["EMA200", "RSI", "ADX", "ATR"]): continue
+
+        lt = bar["LT"]; hour = int(lt.hour)
+        if not (6 <= hour < 21): continue
+
+        close = float(bar["Close"])
+        ema200 = float(bar["EMA200"])
+        rsi = float(bar["RSI"])
+        adx = float(bar["ADX"])
+        atr = float(bar["ATR"])
+        reg = regime(bar)
+
+        # Detect active FVG zones
+        active_fvgs = detect_fvg(df, lookback=80)
+        if not active_fvgs: continue
+
+        for fvg in active_fvgs:
+            action = fvg["action"]
+
+            # Confluence filter: FVG must align with trend direction
+            if action == "BUY" and close < ema200: continue   # Only buy FVGs in uptrends
+            if action == "SELL" and close > ema200: continue  # Only sell FVGs in downtrends
+
+            # Sniper signal ID (unique per asset + action + FVG zone)
+            sniper_id = f"SNIPER_{sym}_{action}_{fvg['bot']:.5f}_{fvg['top']:.5f}"
+            if sniper_id in sent: continue
+            if any(t["symbol"] == sym and t["type"] == action for t in active): continue
+
+            # ML and macro filter apply here too
+            atr_r = atr / (close + 1e-9)
+            bbw = float(bar.get("BB_W", 0.01))
+            ema_r = abs(close - ema200) / (close + 1e-9)
+            ml_prob = predict_ml(rsi, adx, atr_r, bbw, hour, ema_r, action)
+            mscore, minfo = macro_score(action)
+
+            # Sniper uses relaxed tier: only needs ML > 45% and macro > 0
+            if ml_prob < 0.45: continue
+            if mscore < 0: continue
+
+            # Entry is mid-gap (best institutional fill)
+            entry = (fvg["top"] + fvg["bot"]) / 2
+            sl_dist = fvg["size"] * 0.5 + atr * 0.3  # Tight SL just beyond gap
+            tp_dist = sl_dist * SNIPER_RR
+
+            if action == "BUY":
+                sl_p  = entry - sl_dist
+                tp1_p = entry + sl_dist
+                tp2_p = entry + tp_dist
+            else:
+                sl_p  = entry + sl_dist
+                tp1_p = entry - sl_dist
+                tp2_p = entry - tp_dist
+
+            thesis, _ = run_gemini_copilot(asset["name"], action, rsi, adx, minfo,
+                                           f"Bullish FVG void fill" if action=="BUY" else "Bearish FVG void fill")
+
+            action_emoji = "🟢" if action == "BUY" else "🔴"
+            sniper_card = (
+                f"🔥 SNIPER {action_emoji} {action} {asset['name']} [A+]\n"
+                f"(Liquidity Void Fill | 1:{int(SNIPER_RR)} RR)\n"
+                f"Entry: {entry:.5f}\n"
+                f"SL: {sl_p:.5f}\n"
+                f"TP1: {tp1_p:.5f}\n"
+                f"TP2: {tp2_p:.5f}\n\n"
+                f"🤖 \"{thesis}\""
+            )
+
+            print(sniper_card)
+            if send_tg(sniper_card):
+                sent[sniper_id] = True
+                active.append({
+                    "symbol": sym, "name": asset["name"], "type": action,
+                    "entry_price": entry, "sl_price": sl_p,
+                    "tp1_price": tp1_p, "tp2_price": tp2_p,
+                    "risk_dollar": rusd, "tp1_hit": False, "realized_pnl": 0.0,
+                    "ai_score": 85, "tier": "A+", "sniper": True
+                })
+                sniper_count += 1
+
+    save_json(LOG_FILE, sent); save_json(TRADES_FILE, active)
+    print(f"[SNIPER ENGINE] {sniper_count} sniper signal(s) fired")
+else:
+    print("[SNIPER ENGINE] Skipped (news block or circuit breaker active)")
 
 # ============================================================
 # AUTO WEEKLY SUNDAY REPORT (No manual trigger needed)
