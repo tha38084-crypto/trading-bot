@@ -2,9 +2,9 @@ name: Plan B AI-Copilot Cloud Scanner
 
 on:
   schedule:
-    # Runs every 30 minutes from 8 AM to 5 PM (UTC), Monday to Friday
-    # London Open (8-12 GMT) and New York Open (13-17 GMT)
-    - cron: '*/30 8-17 * * 1-5'
+    # Runs every 15 minutes from 6 AM to 8 PM (UTC), Monday to Friday
+    # Covers Asian, London, and New York sessions
+    - cron: '*/15 6-20 * * 1-5'
   workflow_dispatch:  # Allows manual run anytime from GitHub website
 
 jobs:
