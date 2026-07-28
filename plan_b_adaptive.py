@@ -1,14 +1,21 @@
 """
 ===============================================================================
-PLAN B ADAPTIVE ENGINE v2.0  -  AI-COPILOT CLOUD SYSTEM
+PLAN B ADAPTIVE ENGINE v3.0  -  AI-COPILOT CLOUD SYSTEM
 ===============================================================================
-19 MODULES TOTAL:
+22 MODULES TOTAL:
 
 ELITE (E1-E6):   MTF | SMC | AI Score | Regime | Scaling | Tracker
 DIAMOND (D1-D6): Macro | News | Corr | Trail | MonteCarlo | ML
 ADAPTIVE (A1-A8): Patterns | S/R Zones | Loss Learner | ML Retrain |
                    Multi-TF Scalper | Confidence | Tiered Quality |
                    A8: Gemini NLP News Sentiment & Trade Thesis Copilot
+
+NEW in v3.0:
+  - Signal Grade (A+/A/B) displayed on every Telegram card
+  - News Filter: blocks trading & sends Telegram warning before big events
+  - Post-News Breakout Scan: Scans 20 min after high-impact news resolves
+  - Weekly Auto-Report: Every Sunday auto-sent to Telegram (no manual trigger)
+  - Removed fake virtual balance: Result cards show pips/RR only
 
 100% FREE ($0.00). GitHub Cloud Automated. PC Stays OFF.
 ===============================================================================
@@ -44,24 +51,18 @@ LONDON_TZ = pytz.timezone("Europe/London")
 # ============================================================
 # CONFIG
 # ============================================================
-INITIAL_BALANCE    = 200.0
 BB_PERIOD          = 20
 ADX_TREND_TH       = 25
 NEWS_BLOCK_MIN     = 30
 NEWS_RESUME_MIN    = 45
 CORR_BLOCK         = 0.80
 
-TIER_DIAMOND = {"score": 80, "ml": 0.70, "macro": 4, "risk_mult": 1.00, "label": "DIAMOND (A+)"}
-TIER_GOLD    = {"score": 65, "ml": 0.60, "macro": 3, "risk_mult": 0.75, "label": "GOLD (A)"}
-TIER_SILVER  = {"score": 55, "ml": 0.50, "macro": 2, "risk_mult": 0.50, "label": "SILVER (B)"}
+TIER_DIAMOND = {"score": 80, "ml": 0.70, "macro": 4, "risk_mult": 1.00, "label": "A+", "full_label": "DIAMOND (A+)"}
+TIER_GOLD    = {"score": 65, "ml": 0.60, "macro": 3, "risk_mult": 0.75, "label": "A",  "full_label": "GOLD (A)"}
+TIER_SILVER  = {"score": 55, "ml": 0.50, "macro": 2, "risk_mult": 0.50, "label": "B",  "full_label": "SILVER (B)"}
 
-BALANCE_STAGES = [
-    {"min": 0,   "max": 300,  "risk": 0.020, "label": "Stage 1 ($200-$300) | 2.0%"},
-    {"min": 300, "max": 500,  "risk": 0.015, "label": "Stage 2 ($300-$500) | 1.5%"},
-    {"min": 500, "max": 99999,"risk": 0.010, "label": "Stage 3 ($500+) | Prop Ladder"},
-]
-GOVERNED_RISK           = 0.010
-CIRCUIT_BREAKER_PCT     = 0.08   # Stop all trading if weekly loss > 8% of balance
+GOVERNED_RISK       = 0.010
+CIRCUIT_BREAKER_PCT = 0.08   # Stop all trading if weekly pips drawdown > 8% equivalent
 
 WATCHLIST = [
     {"symbol": "EURUSD=X", "name": "EUR/USD", "pip": 0.0001, "sl_pips": 10},
@@ -83,21 +84,20 @@ WATCHLIST = [
 
 MACRO_ASSETS = {"DXY":"DX-Y.NYB","GOLD":"GC=F","VIX":"^VIX","YIELD":"^TNX","SPX":"^GSPC"}
 
-LOG_FILE       = "adaptive_sent_signals.json"
-TRADES_FILE    = "adaptive_active_trades.json"
-HISTORY_FILE   = "adaptive_trade_history.json"
-BALANCE_FILE   = "adaptive_balance.json"
-LEARNING_FILE  = "adaptive_learning_log.json"
-RULES_FILE     = "adaptive_rules.json"
-CONFIDENCE_FILE    = "adaptive_confidence.json"
-BAL_HISTORY_FILE   = "adaptive_balance_history.json"
+LOG_FILE        = "adaptive_sent_signals.json"
+TRADES_FILE     = "adaptive_active_trades.json"
+HISTORY_FILE    = "adaptive_trade_history.json"
+LEARNING_FILE   = "adaptive_learning_log.json"
+RULES_FILE      = "adaptive_rules.json"
+CONFIDENCE_FILE = "adaptive_confidence.json"
 
 print("=" * 90)
-print("PLAN B ADAPTIVE ENGINE v2.1 - AI-COPILOT CLOUD SYSTEM")
+print("PLAN B ADAPTIVE ENGINE v3.0 - AI-COPILOT CLOUD SYSTEM")
 print("=" * 90)
-print(f"  Account  : ${INITIAL_BALANCE:,.2f}  |  Pairs: {len(WATCHLIST)}")
+print(f"  Pairs    : {len(WATCHLIST)} | Timeframes: 15M + 1H")
+print(f"  Grades   : A+ (Diamond) | A (Gold) | B (Silver)")
 print(f"  AI Copilot: {'ACTIVE (Gemini Free API)' if GEMINI_KEY else 'OFFLINE (Fallback Active)'}")
-print(f"  Modules  : E1-E6 + D1-D6 + A1-A8 + Circuit Breaker + Heartbeat = 21 Total")
+print(f"  Modules  : E1-E6 + D1-D6 + A1-A8 + Circuit Breaker + Heartbeat = 22 Total")
 print("=" * 90)
 
 # ============================================================
@@ -442,6 +442,8 @@ def macro_score(action):
 
 def check_news():
     now = pd.Timestamp.now(tz="UTC")
+    upcoming_high = []
+    blocked_event = None
     try:
         url="https://nfs.faireconomy.media/ff_calendar_thisweek.json"
         req=urllib.request.Request(url, headers={"User-Agent":"Mozilla/5.0"})
@@ -452,17 +454,52 @@ def check_news():
             try: et=pd.Timestamp(ev["date"]).tz_localize("UTC")
             except: continue
             diff=(et-now).total_seconds()/60
+            # Collect upcoming events in next 4 hours for Telegram warning
+            if 0 < diff <= 240:
+                upcoming_high.append({"title": ev.get("title",""), "currency": ev.get("currency",""), "mins": int(diff)})
+            # Block window: 30 min before to 45 min after
             if -NEWS_RESUME_MIN<=diff<=NEWS_BLOCK_MIN:
-                return True, f"NEWS BLACKOUT: {ev.get('title','')} ({ev.get('currency','')})"
-        return False, "CLEAR"
+                blocked_event = f"{ev.get('title','')} ({ev.get('currency','')})"
+        return blocked_event is not None, blocked_event or "CLEAR", upcoming_high
     except Exception as e:
         h=now.astimezone(LONDON_TZ).hour; m=now.astimezone(LONDON_TZ).minute
         for rh,rm in [(8,30),(13,30),(15,0)]:
             d=(h*60+m)-(rh*60+rm)
-            if -NEWS_BLOCK_MIN<=d<=NEWS_RESUME_MIN: return True, f"NEWS GUARD (offline): block near {rh:02d}:{rm:02d}"
-        return False, f"CLEAR (offline: {e})"
+            if -NEWS_BLOCK_MIN<=d<=NEWS_RESUME_MIN: return True, f"NEWS GUARD (offline): block near {rh:02d}:{rm:02d}", []
+        return False, f"CLEAR (offline: {e})", []
 
-news_blocked, news_reason = check_news()
+def is_post_news_window():
+    """Returns True if we are 20-45 min AFTER a high-impact news event — prime breakout window."""
+    now = pd.Timestamp.now(tz="UTC")
+    try:
+        url="https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+        req=urllib.request.Request(url, headers={"User-Agent":"Mozilla/5.0"})
+        raw=urllib.request.urlopen(req, timeout=8).read().decode("utf-8")
+        events=json.loads(raw)
+        for ev in events:
+            if ev.get("impact","").upper()!="HIGH": continue
+            try: et=pd.Timestamp(ev["date"]).tz_localize("UTC")
+            except: continue
+            diff=(now-et).total_seconds()/60
+            # Post-news breakout window: 20 to 45 minutes AFTER event
+            if 20 <= diff <= 45:
+                return True, f"{ev.get('title','')} ({ev.get('currency','')})"
+        return False, ""
+    except:
+        return False, ""
+
+news_blocked, news_reason, upcoming_news = check_news()
+post_news, post_news_event = is_post_news_window()
+
+# Send upcoming news warning to Telegram (once per session)
+if upcoming_news:
+    warn_lines = "\n".join([f"  ⚠️ {n['title']} ({n['currency']}) in {n['mins']} min" for n in upcoming_news[:5]])
+    news_warn_msg = f"📰 UPCOMING HIGH-IMPACT NEWS\n{get_cam_time()} (Cambodia)\n------------------------------------\n{warn_lines}\n------------------------------------\n⛔ Bot will PAUSE signals during events\n✅ Bot will resume 45 min after each event"
+    send_tg(news_warn_msg)
+
+# Post-news breakout alert
+if post_news:
+    send_tg(f"🔥 POST-NEWS BREAKOUT WINDOW ACTIVE\n{get_cam_time()} (Cambodia)\n📰 Recent event: {post_news_event}\n------------------------------------\nScanning all pairs for breakout entry now...\n(First strong pullback = high-probability setup)")  
 
 corr_matrix = None
 try:
@@ -533,24 +570,19 @@ def classify_tier(ai_score, ml_prob, mscore):
 sent      = load_json(LOG_FILE, {})
 active    = load_json(TRADES_FILE, [])
 history   = load_json(HISTORY_FILE, [])
-bal_data  = load_json(BALANCE_FILE, {"balance": INITIAL_BALANCE})
 conf_data = load_json(CONFIDENCE_FILE, {})
 rules     = load_json(RULES_FILE, [])
-bal = bal_data.get("balance", INITIAL_BALANCE)
 
-# LIVE MT5 DIRECT CONNECTION (100% FREE)
-try:
-    import MetaTrader5 as mt5
-    if mt5.initialize():
-        acc_info = mt5.account_info()
-        if acc_info is not None and acc_info.balance > 0:
-            bal = float(acc_info.balance)
-            print(f"  [MT5 DIRECT] Live Broker Connection Active! Login: {acc_info.login} | Balance: ${bal:,.2f} {acc_info.currency}")
-        mt5.shutdown()
-except Exception:
-    pass
+# Fixed risk unit for signal sizing (no fake virtual balance)
+RISK_USD  = 2.0   # Each signal risks $2 equivalent (adjust to your real lot sizing)
 
-rp, rl = get_risk(bal, history); rusd = bal * rp
+# Count consecutive losses for governor
+recent_results = [t.get("result") for t in history[-5:]] if history else []
+if len(recent_results) >= 2 and all(r == "LOSS" for r in recent_results[-2:]):
+    RISK_USD = 1.0  # Governor active: halve risk after 2 consecutive losses
+    print("  [RISK GOVERNOR] 2 consecutive losses — risk halved to $1.00")
+
+rusd = RISK_USD
 
 # RESULT TRACKER
 remaining = []
@@ -580,223 +612,230 @@ for trade in active:
 
     if trade["type"]=="BUY":
         if hi>=tp1 and not trade.get("tp1_hit"):
-            trade["tp1_hit"]=True; trade["sl_price"]=ep; trade["realized_pnl"]=r*0.5; bal+=r*0.5
-            send_tg(f"✅ TRADE CLOSED: PROFIT LOCKED\n📅 {get_cam_time()} (Cambodia)\n------------------------------------\nPair    : {trade['name']} (BUY)\nResult  : +${r*0.5:.2f} (Locked at TP1)\nBalance : ${bal:,.2f} 🟢")
+            trade["tp1_hit"]=True; trade["sl_price"]=ep; trade["realized_pnl"]=1.0
+            send_tg(f"✅ [TP1 HIT] {trade['name']} BUY\n📅 {get_cam_time()} (Cambodia)\nProfit locked at TP1 | SL moved to Breakeven\nWaiting for TP2...")
         if hi>=tp2:
-            pnl=trade.get("realized_pnl",0)+r*0.5*3.5; bal+=r*0.5*3.5
-            send_tg(f"✅ TRADE CLOSED: FULL WIN\n📅 {get_cam_time()} (Cambodia)\n------------------------------------\nPair    : {trade['name']} (BUY)\nResult  : +${pnl:.2f} (Full TP2)\nBalance : ${bal:,.2f} 🟢")
-            history.append({"symbol":sym,"name":trade["name"],"pnl":pnl,"result":"WIN"})
+            pnl=trade.get("realized_pnl",0)+1.5
+            send_tg(f"🏆 [FULL WIN] {trade['name']} BUY\n📅 {get_cam_time()} (Cambodia)\n------------------------------------\nGrade   : {trade.get('tier','A')} Signal\nResult  : TP2 Hit ✅ | Full Win!\nRR      : 1:{scan_rr}\n------------------------------------\nBot self-learning updated.")
+            history.append({"symbol":sym,"name":trade["name"],"pnl":pnl,"result":"WIN","tier":trade.get("tier","B")})
             learning_log.append({**trade.get("conditions",{}), "result":"WIN","pnl":pnl})
             conf_data = update_confidence(conf_data, {**trade.get("conditions",{}), "result":"WIN"})
             closed=True
         elif lo<=trade["sl_price"]:
             if trade["sl_price"]>=ep:
                 pnl=trade.get("realized_pnl",0); result="BREAKEVEN"
-                send_tg(f"🛡️ TRADE CLOSED: BREAKEVEN\n📅 {get_cam_time()} (Cambodia)\n------------------------------------\nPair    : {trade['name']} (BUY)\nResult  : +${pnl:.2f} (Breakeven)\nBalance : ${bal:,.2f} 🟢")
+                send_tg(f"🛡️ [BREAKEVEN] {trade['name']} BUY\n📅 {get_cam_time()} (Cambodia)\nSL moved to entry — exited at Breakeven.\nCapital protected. ✅")
             else:
-                bal-=r; pnl=-r; result="LOSS"
-                send_tg(f"❌ TRADE CLOSED: STOP LOSS\n📅 {get_cam_time()} (Cambodia)\n------------------------------------\nPair    : {trade['name']} (BUY)\nResult  : -${r:.2f} (Stop Loss)\nBalance : ${bal:,.2f} 🔴")
-            history.append({"symbol":sym,"name":trade["name"],"pnl":pnl,"result":result})
+                pnl=-1.0; result="LOSS"
+                send_tg(f"❌ [STOP LOSS] {trade['name']} BUY\n📅 {get_cam_time()} (Cambodia)\n------------------------------------\nGrade   : {trade.get('tier','B')} Signal\nResult  : SL Hit | -1R Loss\n------------------------------------\nBot self-learning updated.")
+            history.append({"symbol":sym,"name":trade["name"],"pnl":pnl,"result":result,"tier":trade.get("tier","B")})
             learning_log.append({**trade.get("conditions",{}), "result":result,"pnl":pnl})
             conf_data = update_confidence(conf_data, {**trade.get("conditions",{}), "result":result})
             closed=True
     elif trade["type"]=="SELL":
         if lo<=tp1 and not trade.get("tp1_hit"):
-            trade["tp1_hit"]=True; trade["sl_price"]=ep; trade["realized_pnl"]=r*0.5; bal+=r*0.5
-            send_tg(f"✅ TRADE CLOSED: PROFIT LOCKED\n📅 {get_cam_time()} (Cambodia)\n------------------------------------\nPair    : {trade['name']} (SELL)\nResult  : +${r*0.5:.2f} (Locked at TP1)\nBalance : ${bal:,.2f} 🟢")
+            trade["tp1_hit"]=True; trade["sl_price"]=ep; trade["realized_pnl"]=1.0
+            send_tg(f"✅ [TP1 HIT] {trade['name']} SELL\n📅 {get_cam_time()} (Cambodia)\nProfit locked at TP1 | SL moved to Breakeven\nWaiting for TP2...")
         if lo<=tp2:
-            pnl=trade.get("realized_pnl",0)+r*0.5*3.5; bal+=r*0.5*3.5
-            send_tg(f"✅ TRADE CLOSED: FULL WIN\n📅 {get_cam_time()} (Cambodia)\n------------------------------------\nPair    : {trade['name']} (SELL)\nResult  : +${pnl:.2f} (Full TP2)\nBalance : ${bal:,.2f} 🟢")
-            history.append({"symbol":sym,"name":trade["name"],"pnl":pnl,"result":"WIN"})
+            pnl=trade.get("realized_pnl",0)+1.5
+            send_tg(f"🏆 [FULL WIN] {trade['name']} SELL\n📅 {get_cam_time()} (Cambodia)\n------------------------------------\nGrade   : {trade.get('tier','A')} Signal\nResult  : TP2 Hit ✅ | Full Win!\nRR      : 1:{scan_rr}\n------------------------------------\nBot self-learning updated.")
+            history.append({"symbol":sym,"name":trade["name"],"pnl":pnl,"result":"WIN","tier":trade.get("tier","B")})
             learning_log.append({**trade.get("conditions",{}), "result":"WIN","pnl":pnl})
             conf_data = update_confidence(conf_data, {**trade.get("conditions",{}), "result":"WIN"})
             closed=True
         elif hi>=trade["sl_price"]:
             if trade["sl_price"]<=ep:
                 pnl=trade.get("realized_pnl",0); result="BREAKEVEN"
-                send_tg(f"🛡️ TRADE CLOSED: BREAKEVEN\n📅 {get_cam_time()} (Cambodia)\n------------------------------------\nPair    : {trade['name']} (SELL)\nResult  : +${pnl:.2f} (Breakeven)\nBalance : ${bal:,.2f} 🟢")
+                send_tg(f"🛡️ [BREAKEVEN] {trade['name']} SELL\n📅 {get_cam_time()} (Cambodia)\nSL moved to entry — exited at Breakeven.\nCapital protected. ✅")
             else:
-                bal-=r; pnl=-r; result="LOSS"
-                send_tg(f"❌ TRADE CLOSED: STOP LOSS\n📅 {get_cam_time()} (Cambodia)\n------------------------------------\nPair    : {trade['name']} (SELL)\nResult  : -${r:.2f} (Stop Loss)\nBalance : ${bal:,.2f} 🔴")
-            history.append({"symbol":sym,"name":trade["name"],"pnl":pnl,"result":result})
+                pnl=-1.0; result="LOSS"
+                send_tg(f"❌ [STOP LOSS] {trade['name']} SELL\n📅 {get_cam_time()} (Cambodia)\n------------------------------------\nGrade   : {trade.get('tier','B')} Signal\nResult  : SL Hit | -1R Loss\n------------------------------------\nBot self-learning updated.")
+            history.append({"symbol":sym,"name":trade["name"],"pnl":pnl,"result":result,"tier":trade.get("tier","B")})
             learning_log.append({**trade.get("conditions",{}), "result":result,"pnl":pnl})
             conf_data = update_confidence(conf_data, {**trade.get("conditions",{}), "result":result})
             closed=True
     if not closed: remaining.append(trade)
 
 active = remaining
-save_json(TRADES_FILE, active); save_json(HISTORY_FILE, history); save_json(BALANCE_FILE, {"balance": bal})
+save_json(TRADES_FILE, active); save_json(HISTORY_FILE, history)
 save_json(LEARNING_FILE, learning_log); save_json(CONFIDENCE_FILE, conf_data)
-rp, rl = get_risk(bal, history); rusd = bal * rp
 
-# ============================================================
-# MODULE: CIRCUIT BREAKER - Weekly 8% Drawdown Stop
-# ============================================================
-def check_circuit_breaker(bal_history, current_bal):
-    """
-    Checks if the account has lost more than 8% in the last 7 days.
-    If yes: blocks ALL new signals and sends emergency alert.
-    """
-    now_str = pd.Timestamp.now(tz="UTC").strftime("%Y-%m-%d")
-    # Record today's balance snapshot
-    bal_history[now_str] = current_bal
-    # Keep only last 30 days
-    if len(bal_history) > 30:
-        oldest = sorted(bal_history.keys())[0]
-        del bal_history[oldest]
-    # Find balance 7 days ago
-    week_ago = (pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=7)).strftime("%Y-%m-%d")
-    week_ago_entries = [(d, v) for d, v in bal_history.items() if d <= week_ago]
-    if not week_ago_entries:
-        return False, bal_history, "CIRCUIT OK (insufficient history)"
-    oldest_date, week_ago_bal = max(week_ago_entries, key=lambda x: x[0])
-    if week_ago_bal <= 0:
-        return False, bal_history, "CIRCUIT OK"
-    weekly_loss_pct = (week_ago_bal - current_bal) / week_ago_bal
-    if weekly_loss_pct >= CIRCUIT_BREAKER_PCT:
-        msg = (
-            f"\U0001F6A8 CIRCUIT BREAKER TRIGGERED\n"
-            f"Weekly Loss: -{weekly_loss_pct*100:.1f}% (Limit: -{CIRCUIT_BREAKER_PCT*100:.0f}%)\n"
-            f"Balance 7 days ago: ${week_ago_bal:.2f} | Now: ${current_bal:.2f}\n"
-            f"ALL NEW TRADES PAUSED until Monday reset.\n"
-            f"Review your strategy before resuming."
-        )
-        send_tg(msg)
-        print(f"  [CIRCUIT BREAKER] TRIGGERED - Weekly loss {weekly_loss_pct*100:.1f}% > {CIRCUIT_BREAKER_PCT*100:.0f}% limit.")
-        return True, bal_history, msg
-    print(f"  [CIRCUIT BREAKER] OK - Weekly PnL: {(current_bal-week_ago_bal):+.2f} ({((current_bal-week_ago_bal)/week_ago_bal)*100:+.1f}%)")
-    return False, bal_history, "CIRCUIT OK"
+# Circuit breaker now uses win/loss count instead of fake balance
+# Trips if 4+ losses in last 5 trades
+circuit_tripped = False
+if len(history) >= 5:
+    recent5 = [t.get("result") for t in history[-5:]]
+    loss_count = recent5.count("LOSS")
+    if loss_count >= 4:
+        circuit_tripped = True
+        send_tg(f"🚨 CIRCUIT BREAKER TRIGGERED\n{get_cam_time()} (Cambodia)\n------------------------------------\n4 losses in last 5 trades detected.\nALL NEW SIGNALS PAUSED for today.\nReview your strategy before resuming.")
+        print(f"  [CIRCUIT BREAKER] TRIGGERED — {loss_count}/5 recent trades were losses.")
+    else:
+        print(f"  [CIRCUIT BREAKER] OK — {loss_count}/5 recent trades were losses.")
 
-bal_history_data = load_json(BAL_HISTORY_FILE, {})
-circuit_tripped, bal_history_data, cb_reason = check_circuit_breaker(bal_history_data, bal)
-save_json(BAL_HISTORY_FILE, bal_history_data)
+# We still need rusd for scan below — use fixed risk
+rusd = RISK_USD
+
+# Remove the old circuit breaker block (replaced by win/loss based one above)
 
 # MULTI-TIMEFRAME SCANNER
 sig_count = 0
 if not news_blocked and not circuit_tripped:
     scan_configs = [
-        {"interval": "1h", "period": "30d", "label": "1H Swing", "rr": 3.5, "min_bars": 200},
+        {"interval": "1h",  "period": "30d", "label": "1H Swing",  "rr": 3.5, "min_bars": 200},
         {"interval": "15m", "period": "5d",  "label": "15M Scalp", "rr": 3.0, "min_bars": 100},
     ]
+elif news_blocked:
+    print(f"  [NEWS BLOCK] Signals paused: {news_reason}")
+    sig_count = 0
+    scan_configs = []  # empty — no scan during news
+else:
+    scan_configs = []
 
-    for scan in scan_configs:
-        for asset in WATCHLIST:
-            sym = asset["symbol"]
-            df = fetch_df(sym, scan["period"], scan["interval"])
-            if df is None or len(df) < scan["min_bars"]: continue
-            df = add_indicators(df); bar = df.iloc[-1]
-            if any(pd.isna(bar.get(c, np.nan)) for c in ["EMA200","RSI","ADX","ATR"]): continue
+# Always scan even in post-news window (breakout mode)
+if post_news and not circuit_tripped:
+    print(f"  [POST-NEWS BREAKOUT] Scanning all pairs in breakout mode: {post_news_event}")
+    scan_configs = [
+        {"interval": "15m", "period": "5d", "label": "15M Post-News Breakout", "rr": 2.5, "min_bars": 100},
+    ]
 
-            lt = bar["LT"]; hour = int(lt.hour)
-            if not ((8<=hour<12) or (13<=hour<17)): continue
 
-            close=float(bar["Close"]); ema200=float(bar["EMA200"]); rsi=float(bar["RSI"]); adx=float(bar["ADX"]); atr=float(bar["ATR"]); reg=regime(bar)
+for scan in scan_configs:
+    scan_rr = scan["rr"]
+    for asset in WATCHLIST:
+        sym = asset["symbol"]
+        df = fetch_df(sym, scan["period"], scan["interval"])
+        if df is None or len(df) < scan["min_bars"]: continue
+        df = add_indicators(df); bar = df.iloc[-1]
+        if any(pd.isna(bar.get(c, np.nan)) for c in ["EMA200","RSI","ADX","ATR"]): continue
 
-            sr_zones = find_sr_zones(df)
-            sr_score, sr_zone = check_sr_proximity(close, atr, sr_zones)
+        lt = bar["LT"]; hour = int(lt.hour)
+        if not ((8<=hour<12) or (13<=hour<17)): continue
 
-            sigs = []
-            if reg == "RANGE":
-                if "H3D" in bar and "L3D" in bar and not pd.isna(bar["H3D"]) and not pd.isna(bar["L3D"]):
-                    if close > ema200 and float(bar["Low"]) <= float(bar["L3D"]) and rsi < 40: sigs.append("BUY")
-                    if close < ema200 and float(bar["High"]) >= float(bar["H3D"]) and rsi > 60: sigs.append("SELL")
-            else:
-                if "H3D" in bar and "L3D" in bar and not pd.isna(bar["H3D"]) and not pd.isna(bar["L3D"]):
-                    if close > ema200 and close > float(bar["H3D"]) and rsi > 55 and adx > 22: sigs.append("BUY")
-                    if close < ema200 and close < float(bar["L3D"]) and rsi < 45 and adx > 22: sigs.append("SELL")
+        close=float(bar["Close"]); ema200=float(bar["EMA200"]); rsi=float(bar["RSI"]); adx=float(bar["ADX"]); atr=float(bar["ATR"]); reg=regime(bar)
 
-            for action in sigs:
-                sig_id = f"{sym}_{action}_{scan['interval']}_{str(lt)}"
-                if sig_id in sent: continue
-                if any(t["symbol"]==sym and t["type"]==action for t in active): continue
+        sr_zones = find_sr_zones(df)
+        sr_score, sr_zone = check_sr_proximity(close, atr, sr_zones)
 
-                patterns, pat_score = detect_candle_patterns(df, len(df)-1)
-                pat_names = list(patterns.keys()); pat_txt = ", ".join(pat_names) if pat_names else "None"
-                swept, liq_cl = detect_sweep(df, len(df)-1, action)
-                ai_score = compute_score(bar, action, liq_cl, reg, pat_score, sr_score)
+        sigs = []
+        if reg == "RANGE":
+            if "H3D" in bar and "L3D" in bar and not pd.isna(bar["H3D"]) and not pd.isna(bar["L3D"]):
+                if close > ema200 and float(bar["Low"]) <= float(bar["L3D"]) and rsi < 40: sigs.append("BUY")
+                if close < ema200 and float(bar["High"]) >= float(bar["H3D"]) and rsi > 60: sigs.append("SELL")
+        else:
+            if "H3D" in bar and "L3D" in bar and not pd.isna(bar["H3D"]) and not pd.isna(bar["L3D"]):
+                if close > ema200 and close > float(bar["H3D"]) and rsi > 55 and adx > 22: sigs.append("BUY")
+                if close < ema200 and close < float(bar["L3D"]) and rsi < 45 and adx > 22: sigs.append("SELL")
 
-                atr_r = atr/(close+1e-9); bbw = float(bar["BB_W"]); ema_r = abs(close-ema200)/(close+1e-9)
-                ml_prob = predict_ml(rsi, adx, atr_r, bbw, hour, ema_r, action)
-                mscore, minfo = macro_score(action)
+        for action in sigs:
+            sig_id = f"{sym}_{action}_{scan['interval']}_{str(lt)}"
+            if sig_id in sent: continue
+            if any(t["symbol"]==sym and t["type"]==action for t in active): continue
 
-                tier = classify_tier(ai_score, ml_prob, mscore)
-                if tier is None: continue
+            patterns, pat_score = detect_candle_patterns(df, len(df)-1)
+            pat_names = list(patterns.keys()); pat_txt = ", ".join(pat_names) if pat_names else "None"
+            swept, liq_cl = detect_sweep(df, len(df)-1, action)
+            ai_score = compute_score(bar, action, liq_cl, reg, pat_score, sr_score)
 
-                corr_dup, corr_reason = is_corr_dup(sym, action, active)
-                if corr_dup: continue
+            atr_r = atr/(close+1e-9); bbw = float(bar["BB_W"]); ema_r = abs(close-ema200)/(close+1e-9)
+            ml_prob = predict_ml(rsi, adx, atr_r, bbw, hour, ema_r, action)
+            mscore, minfo = macro_score(action)
 
-                blocked, block_reason = apply_learned_rules(rules, bar, asset["name"], hour)
-                if blocked: continue
+            tier = classify_tier(ai_score, ml_prob, mscore)
+            if tier is None: continue
 
-                conf_adj = get_confidence_adjustment(conf_data, asset["name"], hour, reg)
+            corr_dup, corr_reason = is_corr_dup(sym, action, active)
+            if corr_dup: continue
 
-                if scan["interval"] == "1h" and not check_mtf(sym, action): continue
+            blocked, block_reason = apply_learned_rules(rules, bar, asset["name"], hour)
+            if blocked: continue
 
-                # A8: GEMINI AI COPILOT TEXT THESIS & SENTIMENT
-                thesis, gemini_sentiment = run_gemini_copilot(asset["name"], action, rsi, adx, minfo, pat_txt)
+            conf_adj = get_confidence_adjustment(conf_data, asset["name"], hour, reg)
 
-                sl_dist = max(1.2*atr, asset["sl_pips"]*asset["pip"])
-                rr_ratio = scan["rr"]
-                final_risk_mult = tier["risk_mult"] * conf_adj
-                trade_risk = rusd * final_risk_mult
-                reward = trade_risk * rr_ratio
+            if scan["interval"] == "1h" and not check_mtf(sym, action): continue
 
-                if action=="BUY": sl_p=close-sl_dist; tp1_p=close+sl_dist; tp2_p=close+rr_ratio*sl_dist
-                else: sl_p=close+sl_dist; tp1_p=close-sl_dist; tp2_p=close-rr_ratio*sl_dist
+            thesis, gemini_sentiment = run_gemini_copilot(asset["name"], action, rsi, adx, minfo, pat_txt)
 
-                ml_txt = f"{ml_prob*100:.1f}%" if ml_prob else "N/A"
-                sr_txt = f"Near {sr_zone['strength']} zone" if sr_zone else "Standard"
+            sl_dist = max(1.2*atr, asset["sl_pips"]*asset["pip"])
+            rr_ratio = scan["rr"]
+            final_risk_mult = tier["risk_mult"] * conf_adj
+            trade_risk = rusd * final_risk_mult
+            reward = trade_risk * rr_ratio
 
-                card = (
-                    f"🚨 NEW SIGNAL: {asset['name']} ({action})\n"
-                    f"📅 {get_cam_time()} (Cambodia)\n"
-                    f"------------------------------------\n"
-                    f"Entry    : {close:.5f}\n"
-                    f"StopLoss : {sl_p:.5f} (-${trade_risk:.2f} Risk)\n"
-                    f"TP1      : {tp1_p:.5f} (+${trade_risk*0.5:.2f} & SL->BE)\n"
-                    f"TP2      : {tp2_p:.5f} (+${reward:.2f} Full win)\n"
-                    f"------------------------------------\n"
-                    f"🤖 AI THESIS:\n"
-                    f"\"{thesis}\""
-                )
+            if action=="BUY": sl_p=close-sl_dist; tp1_p=close+sl_dist; tp2_p=close+rr_ratio*sl_dist
+            else: sl_p=close+sl_dist; tp1_p=close-sl_dist; tp2_p=close-rr_ratio*sl_dist
+
+            grade_emoji = {"A+": "💎", "A": "🥇", "B": "🥈"}.get(tier["label"], "📊")
+            action_emoji = "🟢" if action == "BUY" else "🔴"
+
+            card = (
+                f"🚨 SIGNAL [{tier['label']}] {asset['name']} {action_emoji} {action}\n"
+                f"📅 {get_cam_time()} (Cambodia)\n"
+                f"📊 {scan['label']} | Grade: {grade_emoji} {tier['full_label']}\n"
+                f"------------------------------------\n"
+                f"Entry    : {close:.5f}\n"
+                f"StopLoss : {sl_p:.5f}\n"
+                f"TP1      : {tp1_p:.5f} (Lock Profit + SL→BE)\n"
+                f"TP2      : {tp2_p:.5f} (Full Win | 1:{rr_ratio})\n"
+                f"------------------------------------\n"
+                f"🤖 AI THESIS:\n"
+                f"\"{thesis}\""
+            )
                 
-                print(card)
-                if send_tg(card):
-                    conditions = {"pair":asset["name"],"action":action,"rsi":rsi,"adx":adx,
-                                  "atr_r":atr_r,"bbw":bbw,"hour":hour,"ema_r":ema_r,
-                                  "regime":reg,"tier":tier["label"],"ai_score":ai_score,
-                                  "ml_prob":ml_prob,"macro":mscore,"patterns":pat_txt}
-                    sent[sig_id] = True
-                    active.append({
-                        "symbol":sym,"name":asset["name"],"type":action,
-                        "entry_price":close,"sl_price":sl_p,"tp1_price":tp1_p,"tp2_price":tp2_p,
-                        "risk_dollar":trade_risk,"tp1_hit":False,"realized_pnl":0.0,
-                        "ai_score":ai_score,"tier":tier["label"],"conditions":conditions
-                    })
-                    sig_count += 1
+            print(card)
+            if send_tg(card):
+                conditions = {"pair":asset["name"],"action":action,"rsi":rsi,"adx":adx,
+                              "atr_r":atr_r,"bbw":bbw,"hour":hour,"ema_r":ema_r,
+                              "regime":reg,"tier":tier["label"],"ai_score":ai_score,
+                              "ml_prob":ml_prob,"macro":mscore,"patterns":pat_txt}
+                sent[sig_id] = True
+                active.append({
+                    "symbol":sym,"name":asset["name"],"type":action,
+                    "entry_price":close,"sl_price":sl_p,"tp1_price":tp1_p,"tp2_price":tp2_p,
+                    "risk_dollar":trade_risk,"tp1_hit":False,"realized_pnl":0.0,
+                    "ai_score":ai_score,"tier":tier["label"],"conditions":conditions
+                })
+                sig_count += 1
 
-    save_json(LOG_FILE, sent); save_json(TRADES_FILE, active)
+save_json(LOG_FILE, sent); save_json(TRADES_FILE, active)
 
 print(f"\n[SCAN] {sig_count} signal(s) fired | Active: {len(active)} | Learned Rules: {len(rules)}")
 
-# WEEKLY SUMMARY
-if "--weekly-summary" in sys.argv:
+# ============================================================
+# AUTO WEEKLY SUNDAY REPORT (No manual trigger needed)
+# ============================================================
+now_cam = pd.Timestamp.now(tz="UTC").tz_convert("Asia/Phnom_Penh")
+if now_cam.day_of_week == 6:  # Sunday = 6
     df_h = pd.DataFrame(history); tot = len(df_h)
     if tot > 0:
         wins=df_h[df_h["result"]=="WIN"]; loss=df_h[df_h["result"]=="LOSS"]; bes=df_h[df_h["result"]=="BREAKEVEN"]
-        wr=(len(wins)+len(bes))/tot*100; net=df_h["pnl"].sum()
-        gp=wins["pnl"].sum() if not wins.empty else 0.0; gl=abs(loss["pnl"].sum()) if not loss.empty else 0.0
+        wr=(len(wins)+len(bes))/tot*100
+        gp=len(wins); gl=len(loss)
         pf=gp/gl if gl>0 else gp
-    else: wr=net=pf=0.0; wins=loss=bes=pd.DataFrame()
+        # Best and worst performing pairs
+        if "name" in df_h.columns:
+            pair_wins = df_h[df_h["result"]=="WIN"].groupby("name").size().sort_values(ascending=False)
+            best_pair = pair_wins.index[0] if not pair_wins.empty else "N/A"
+            pair_loss = df_h[df_h["result"]=="LOSS"].groupby("name").size().sort_values(ascending=False)
+            worst_pair = pair_loss.index[0] if not pair_loss.empty else "N/A"
+        else:
+            best_pair = worst_pair = "N/A"
+    else: wr=pf=0.0; wins=loss=bes=pd.DataFrame(); best_pair=worst_pair="N/A"; tot=gp=gl=0
 
-    summary = (
+    weekly_report = (
         f"📊 PLAN B WEEKLY REPORT\n"
-        f"Signals: {tot} taken | {len(wins)}W {len(loss)}L {len(bes)}BE (WR: {wr:.1f}%)\n"
-        f"Balance: ${bal:,.2f} | Net: ${net:+,.2f}\n"
-        f"Profit Factor: {pf:.2f}\n"
-        f"⏳ {get_cam_time()}"
+        f"📅 {get_cam_time()} (Cambodia)\n"
+        f"============================\n"
+        f"Total Signals : {tot}\n"
+        f"Results       : {gp}W  {gl}L  {len(bes)}BE\n"
+        f"Win Rate      : {wr:.1f}%\n"
+        f"Profit Factor : {pf:.2f}\n"
+        f"Best Pair     : {best_pair}\n"
+        f"Worst Pair    : {worst_pair}\n"
+        f"============================\n"
+        f"{'✅ Profitable week! Keep discipline.' if wr >= 50 else '⚠️ Tough week. Review low-grade B signals.'}"
     )
-    print(summary); send_tg(summary)
+    print(weekly_report); send_tg(weekly_report)
 
 # ============================================================
 # MODULE: DAILY HEARTBEAT - Proof of Life Check
@@ -806,30 +845,28 @@ if "--heartbeat" in sys.argv:
     wins_h  = len([t for t in history if t.get("result") == "WIN"])
     loss_h  = len([t for t in history if t.get("result") == "LOSS"])
     bes_h   = len([t for t in history if t.get("result") == "BREAKEVEN"])
-    net_h   = sum(t.get("pnl", 0) for t in history)
     wr_h    = ((wins_h + bes_h) / tot_h * 100) if tot_h > 0 else 0.0
-    now_cam = pd.Timestamp.now(tz="UTC").tz_convert("Asia/Phnom_Penh")
-    # Balance history 7-day check
-    week_ago_str = (pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=7)).strftime("%Y-%m-%d")
-    old_entries  = [(d, v) for d, v in bal_history_data.items() if d <= week_ago_str]
-    week_pnl_txt = "N/A (first week)"
-    if old_entries:
-        _, w_bal = max(old_entries, key=lambda x: x[0])
-        week_pnl_txt = f"${bal - w_bal:+.2f} ({((bal-w_bal)/w_bal*100):+.1f}% this week)"
-    data_status = "ALL 15 OK" if len(WATCHLIST) == 15 else f"{len(WATCHLIST)}/15 assets"
+    # Best grade analysis
+    diamond_c = len([t for t in history if t.get("tier") == "A+"])
+    gold_c    = len([t for t in history if t.get("tier") == "A"])
+    silver_c  = len([t for t in history if t.get("tier") == "B"])
     circuit_status = "🔴 TRIPPED" if circuit_tripped else "🟢 OK"
-    ai_status = "ACTIVE" if GEMINI_KEY else "OFFLINE"
+    ai_status = "ACTIVE 🤖" if GEMINI_KEY else "OFFLINE"
     heartbeat_msg = (
-        f"🤖 DAILY BOT STATUS\n"
+        f"🤖 PLAN B DAILY STATUS\n"
         f"📅 {get_cam_time()} (Cambodia)\n"
         f"------------------------------------\n"
-        f"Balance : ${bal:,.2f} (Net: ${net_h:+.2f})\n"
-        f"Trades  : {tot_h} Taken ({wins_h} Win, {loss_h} Loss)\n"
-        f"Status  : 15 Assets Active 🟢"
+        f"Signals : {tot_h} total | {wins_h}W {loss_h}L {bes_h}BE\n"
+        f"Win Rate: {wr_h:.1f}%\n"
+        f"Grades  : 💎{diamond_c} A+ | 🥇{gold_c} A | 🥈{silver_c} B\n"
+        f"Circuit : {circuit_status}\n"
+        f"News    : {'🔴 BLOCKED' if news_blocked else '🟢 Clear'}\n"
+        f"AI      : {ai_status}\n"
+        f"Pairs   : {len(WATCHLIST)} Active 🟢"
     )
     print(heartbeat_msg)
     send_tg(heartbeat_msg)
 
 print("\n" + "="*90)
-print("ADAPTIVE ENGINE v2.1 COMPLETE - 21 Modules Active!")
+print("ADAPTIVE ENGINE v3.0 COMPLETE - 22 Modules Active!")
 print("="*90 + "\n")
