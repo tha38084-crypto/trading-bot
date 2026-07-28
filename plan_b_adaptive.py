@@ -82,6 +82,8 @@ WATCHLIST = [
     {"symbol": "^DJI", "name": "US30", "pip": 1.0, "sl_pips": 50},
     {"symbol": "^IXIC", "name": "NAS100", "pip": 1.0, "sl_pips": 50},
     {"symbol": "BTC-USD", "name": "Bitcoin", "pip": 1.0, "sl_pips": 500},
+    {"symbol": "SI=F", "name": "Silver", "pip": 0.01, "sl_pips": 40},
+    {"symbol": "EURAUD=X", "name": "EUR/AUD", "pip": 0.0001, "sl_pips": 15},
 ]
 
 MACRO_ASSETS = {"DXY":"DX-Y.NYB","GOLD":"GC=F","VIX":"^VIX","YIELD":"^TNX","SPX":"^GSPC"}
@@ -1146,5 +1148,5 @@ if "--heartbeat" in sys.argv:
     send_tg(heartbeat_msg)
 
 print("\n" + "="*90)
-print("ADAPTIVE ENGINE v4.1 COMPLETE - Dual-Engine | Smart Learning | Daily Ledger")
+print("ADAPTIVE ENGINE v4.2 COMPLETE - 17 Assets | Smart Learning | Daily Ledger")
 print("="*90 + "\n")
