@@ -710,7 +710,7 @@ for scan in scan_configs:
         if any(pd.isna(bar.get(c, np.nan)) for c in ["EMA200","RSI","ADX","ATR"]): continue
 
         lt = bar["LT"]; hour = int(lt.hour)
-        if not ((8<=hour<12) or (13<=hour<17)): continue
+        if not (6 <= hour < 21): continue
 
         close=float(bar["Close"]); ema200=float(bar["EMA200"]); rsi=float(bar["RSI"]); adx=float(bar["ADX"]); atr=float(bar["ATR"]); reg=regime(bar)
 
@@ -718,23 +718,28 @@ for scan in scan_configs:
         sr_score, sr_zone = check_sr_proximity(close, atr, sr_zones)
 
         sigs = []
-        if reg == "RANGE":
-            if "H3D" in bar and "L3D" in bar and not pd.isna(bar["H3D"]) and not pd.isna(bar["L3D"]):
-                if close > ema200 and float(bar["Low"]) <= float(bar["L3D"]) and rsi < 40: sigs.append("BUY")
-                if close < ema200 and float(bar["High"]) >= float(bar["H3D"]) and rsi > 60: sigs.append("SELL")
-        else:
-            if "H3D" in bar and "L3D" in bar and not pd.isna(bar["H3D"]) and not pd.isna(bar["L3D"]):
-                if close > ema200 and close > float(bar["H3D"]) and rsi > 55 and adx > 22: sigs.append("BUY")
-                if close < ema200 and close < float(bar["L3D"]) and rsi < 45 and adx > 22: sigs.append("SELL")
+        buy_swept, buy_liq_cl = detect_sweep(df, len(df)-1, "BUY")
+        sell_swept, sell_liq_cl = detect_sweep(df, len(df)-1, "SELL")
+        patterns, pat_score = detect_candle_patterns(df, len(df)-1)
+        pat_names = list(patterns.keys())
+        pat_txt = ", ".join(pat_names) if pat_names else "None"
+        
+        has_bullish_pat = any(p in pat_names for p in ["Bullish Engulfing", "Hammer", "Morning Star", "Doji"])
+        has_bearish_pat = any(p in pat_names for p in ["Bearish Engulfing", "Shooting Star", "Evening Star", "Doji"])
+
+        if reg == "TREND" or adx > 25:
+            if close > ema200 and rsi < 45 and (buy_swept or has_bullish_pat): sigs.append("BUY")
+            if close < ema200 and rsi > 55 and (sell_swept or has_bearish_pat): sigs.append("SELL")
+        elif reg == "RANGE":
+            if sr_zone and rsi < 45 and (buy_swept or has_bullish_pat): sigs.append("BUY")
+            if sr_zone and rsi > 55 and (sell_swept or has_bearish_pat): sigs.append("SELL")
 
         for action in sigs:
             sig_id = f"{sym}_{action}_{scan['interval']}_{str(lt)}"
             if sig_id in sent: continue
             if any(t["symbol"]==sym and t["type"]==action for t in active): continue
 
-            patterns, pat_score = detect_candle_patterns(df, len(df)-1)
-            pat_names = list(patterns.keys()); pat_txt = ", ".join(pat_names) if pat_names else "None"
-            swept, liq_cl = detect_sweep(df, len(df)-1, action)
+            swept, liq_cl = (buy_swept, buy_liq_cl) if action == "BUY" else (sell_swept, sell_liq_cl)
             ai_score = compute_score(bar, action, liq_cl, reg, pat_score, sr_score)
 
             atr_r = atr/(close+1e-9); bbw = float(bar["BB_W"]); ema_r = abs(close-ema200)/(close+1e-9)
