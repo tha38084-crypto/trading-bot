@@ -10,11 +10,14 @@ ADAPTIVE (A1-A8): Patterns | S/R Zones | Loss Learner | ML Retrain |
                    Multi-TF Scalper | Confidence | Tiered Quality |
                    A8: Gemini NLP News Sentiment & Trade Thesis Copilot
 
-NEW in v4.0 (Dual-Engine):
+NEW in v4.1 (Smart Learning):
   - ENGINE 1 (Standard): Liquidity Trifecta - Trend + RSI Pullback + Sweep/Pattern
   - ENGINE 2 (Sniper):   Fair Value Gap (FVG) Matrix - Institutional liquidity void fills
   - Sniper signals tagged with 🔥 SNIPER on Telegram (1:5+ Risk/Reward)
-  - Both engines run independently every 15 minutes - zero interference
+  - WEIGHTED MEMORY: Old losses fade naturally (never fully deleted, just discounted)
+  - REGIME-AWARE MEMORY: Lessons applied only when market conditions match
+  - SOFT SCORE PENALTY: Learning reduces signal score, never hard-blocks trading
+  - DAILY TRADE LEDGER: End-of-day scorecard sent to Telegram automatically
 
 100% FREE ($0.00). GitHub Cloud Automated. PC Stays OFF.
 ===============================================================================
@@ -340,32 +343,116 @@ def check_sr_proximity(close, atr, zones):
     return 0, None
 
 # ============================================================
-# A3: SELF-LEARNING LOSS ANALYZER
+# A3: SELF-LEARNING LOSS ANALYZER v4.1
+# Weighted Decaying Memory + Regime-Aware + Soft Score Penalty
 # ============================================================
+import datetime as _dt
+
+def _decay_weight(trade, half_life_days=60):
+    """Returns a weight between 0 and 1 based on trade age.
+    Trades from today = 1.0 weight. Half-life = 60 days (never zero).
+    """
+    ts = trade.get("timestamp", None)
+    if ts is None:
+        return 0.5  # Unknown age → medium weight
+    try:
+        age_days = (pd.Timestamp.now(tz="UTC") - pd.Timestamp(ts, tz="UTC")).days
+    except Exception:
+        return 0.5
+    # Exponential decay: weight = 2^(-age/half_life)
+    return max(0.05, 2 ** (-age_days / half_life_days))
+
 def analyze_losses(history, learning_log):
+    """Builds a weighted, regime-aware penalty score map.
+    Returns a dict of penalty rules with float weights (not hard blocks).
+    """
     losses = [t for t in learning_log if t.get("result") == "LOSS"]
-    if len(losses) < 3: return []
+    if len(losses) < 3:
+        return []
+
+    from collections import defaultdict, Counter
     rules = []
-    adx_vals = [t.get("adx", 25) for t in losses if "adx" in t]
-    if adx_vals:
-        low_adx = [v for v in adx_vals if v < 18]
-        if len(low_adx) > len(adx_vals) * 0.6:
-            rules.append({"type": "min_adx", "value": 18, "reason": f"{len(low_adx)}/{len(adx_vals)} losses had ADX<18"})
-    hour_vals = [t.get("hour", 12) for t in losses if "hour" in t]
-    if hour_vals:
-        from collections import Counter
-        bh, count = Counter(hour_vals).most_common(1)[0]
-        if count >= 3:
-            rules.append({"type": "block_hour", "value": bh, "reason": f"{count} losses at hour {bh}:00"})
+
+    # --- 1. Weighted ADX Penalty ---
+    adx_weights = [(t.get("adx", 25), _decay_weight(t)) for t in losses if "adx" in t]
+    if adx_weights:
+        low_adx_wsum  = sum(w for v, w in adx_weights if v < 20)
+        total_wsum    = sum(w for _, w in adx_weights)
+        if total_wsum > 0 and (low_adx_wsum / total_wsum) > 0.55:
+            severity = min(0.40, low_adx_wsum / total_wsum * 0.50)  # Max 40pt penalty
+            rules.append({"type": "soft_adx", "threshold": 20,
+                           "penalty": severity,
+                           "reason": f"Weighted: {low_adx_wsum/total_wsum*100:.0f}% losses at ADX<20"})
+
+    # --- 2. Weighted Hour Penalty (Regime-Aware) ---
+    hour_regime_losses = defaultdict(float)  # (hour, regime) -> weighted loss count
+    hour_regime_total  = defaultdict(float)
+    for t in losses:
+        key = (t.get("hour", -1), t.get("regime", "UNKNOWN"))
+        w = _decay_weight(t)
+        hour_regime_losses[key] += w
+    for t in learning_log:
+        key = (t.get("hour", -1), t.get("regime", "UNKNOWN"))
+        hour_regime_total[key] += _decay_weight(t)
+
+    for (h, reg), wloss in hour_regime_losses.items():
+        wtotal = hour_regime_total.get((h, reg), wloss)
+        if wtotal >= 2 and (wloss / wtotal) > 0.65:  # ≥65% loss rate in this regime+hour
+            severity = min(0.35, (wloss / wtotal) * 0.40)
+            rules.append({"type": "soft_hour_regime", "hour": h, "regime": reg,
+                           "penalty": severity,
+                           "reason": f"Regime {reg} @ hour {h}:00 has {wloss/wtotal*100:.0f}% weighted loss rate"})
+
+    # --- 3. Pair-Specific Penalty ---
+    pair_losses = defaultdict(float)
+    pair_total  = defaultdict(float)
+    for t in losses:
+        pair_losses[t.get("pair", "?")] += _decay_weight(t)
+    for t in learning_log:
+        pair_total[t.get("pair", "?")] += _decay_weight(t)
+
+    for pair, wloss in pair_losses.items():
+        wtotal = pair_total.get(pair, wloss)
+        if wtotal >= 3 and (wloss / wtotal) > 0.70:
+            severity = min(0.30, (wloss / wtotal) * 0.35)
+            rules.append({"type": "soft_pair", "pair": pair,
+                           "penalty": severity,
+                           "reason": f"{pair} has {wloss/wtotal*100:.0f}% weighted loss rate"})
+
     return rules
 
 def apply_learned_rules(rules, bar, asset_name, hour):
+    """Applies soft penalties to the signal score.
+    Returns (total_penalty_0_to_1, reason_string).
+    A penalty of 0.0 = no learning adjustment.
+    A penalty of 1.0 = signal completely suppressed (never reached in practice).
+    """
+    total_penalty = 0.0
+    reasons = []
+    current_regime = regime(bar) if callable(regime) else "UNKNOWN"
+
     for r in rules:
-        if r["type"] == "min_adx" and float(bar["ADX"]) < r["value"]:
-            return True, f"LEARNED RULE: ADX {float(bar['ADX']):.1f} < {r['value']} ({r['reason']})"
-        elif r["type"] == "block_hour" and hour == r["value"]:
-            return True, f"LEARNED RULE: Hour {hour}:00 blocked ({r['reason']})"
-    return False, ""
+        if r["type"] == "soft_adx":
+            adx_val = float(bar.get("ADX", 99))
+            if adx_val < r["threshold"]:
+                # Scale penalty: the lower the ADX below threshold, the bigger the penalty
+                scale = max(0.3, 1.0 - (adx_val / r["threshold"]))
+                total_penalty += r["penalty"] * scale
+                reasons.append(f"ADX={adx_val:.1f}<{r['threshold']} ({r['reason']})")
+
+        elif r["type"] == "soft_hour_regime":
+            if hour == r["hour"] and current_regime == r["regime"]:
+                total_penalty += r["penalty"]
+                reasons.append(f"Hour {hour}:00 in {current_regime} ({r['reason']})")
+
+        elif r["type"] == "soft_pair":
+            if asset_name == r["pair"]:
+                total_penalty += r["penalty"]
+                reasons.append(f"{asset_name} pair penalty ({r['reason']})")
+
+    total_penalty = min(total_penalty, 0.75)  # Hard cap: never suppress more than 75%
+    reason_str = " | ".join(reasons) if reasons else ""
+    return False, reason_str, total_penalty  # Always returns (blocked=False, reason, penalty)
 
 # ============================================================
 # A6: REAL CONFIDENCE TRACKER
@@ -670,7 +757,7 @@ for trade in active:
             send_tg(f"✅ TP1 HIT: {trade['name']} BUY (SL moved to Entry)")
         if hi>=tp2:
             pnl=trade.get("realized_pnl",0)+1.5
-            send_tg(f"🏆 FULL WIN: {trade['name']} BUY (+{scan_rr}R)")
+            send_tg(f"🏆 FULL WIN: {trade['name']} BUY (+{pnl:.1f}R)")
             history.append({"symbol":sym,"name":trade["name"],"pnl":pnl,"result":"WIN","tier":trade.get("tier","B")})
             learning_log.append({**trade.get("conditions",{}), "result":"WIN","pnl":pnl})
             conf_data = update_confidence(conf_data, {**trade.get("conditions",{}), "result":"WIN"})
@@ -692,7 +779,7 @@ for trade in active:
             send_tg(f"✅ TP1 HIT: {trade['name']} SELL (SL moved to Entry)")
         if lo<=tp2:
             pnl=trade.get("realized_pnl",0)+1.5
-            send_tg(f"🏆 FULL WIN: {trade['name']} SELL (+{scan_rr}R)")
+            send_tg(f"🏆 FULL WIN: {trade['name']} SELL (+{pnl:.1f}R)")
             history.append({"symbol":sym,"name":trade["name"],"pnl":pnl,"result":"WIN","tier":trade.get("tier","B")})
             learning_log.append({**trade.get("conditions",{}), "result":"WIN","pnl":pnl})
             conf_data = update_confidence(conf_data, {**trade.get("conditions",{}), "result":"WIN"})
@@ -806,10 +893,13 @@ for scan in scan_configs:
             corr_dup, corr_reason = is_corr_dup(sym, action, active)
             if corr_dup: continue
 
-            blocked, block_reason = apply_learned_rules(rules, bar, asset["name"], hour)
-            if blocked: continue
+            _blocked, block_reason, learn_penalty = apply_learned_rules(rules, bar, asset["name"], hour)
+            # Soft penalty: reduces confidence multiplier but never fully blocks
+            if block_reason:
+                print(f"  [LEARNING] Penalty {learn_penalty:.0%} on {asset['name']}: {block_reason}")
 
             conf_adj = get_confidence_adjustment(conf_data, asset["name"], hour, reg)
+            conf_adj = conf_adj * (1.0 - learn_penalty)  # Apply learning penalty softly
 
             if scan["interval"] == "1h" and not check_mtf(sym, action): continue
 
@@ -956,6 +1046,52 @@ else:
     print("[SNIPER ENGINE] Skipped (news block or circuit breaker active)")
 
 # ============================================================
+# DAILY TRADE LEDGER - End of Day Scorecard
+# Fires at 21:30 London time (after all markets close)
+# ============================================================
+now_london_dl = pd.Timestamp.now(tz="UTC").tz_convert(LONDON_TZ)
+if now_london_dl.hour == 21 and now_london_dl.minute >= 30:
+    today_str = now_london_dl.strftime("%Y-%m-%d")
+    today_trades = [t for t in history if t.get("date", "")[:10] == today_str]
+    if not today_trades:
+        # Fallback: just use last N closed trades from history (for first few days)
+        today_trades = history[-10:] if len(history) >= 10 else history
+
+    if today_trades:
+        lines = []
+        net_r  = 0.0
+        wins   = sum(1 for t in today_trades if t.get("result") == "WIN")
+        losses = sum(1 for t in today_trades if t.get("result") == "LOSS")
+        bes    = sum(1 for t in today_trades if t.get("result") == "BREAKEVEN")
+
+        for i, t in enumerate(today_trades, 1):
+            res    = t.get("result", "OPEN")
+            name   = t.get("name", t.get("symbol", "?"))
+            tier   = t.get("tier", "B")
+            pnl    = t.get("pnl", 0.0)
+            is_snp = t.get("sniper", False)
+            snp_tag = "🔥 SNIPER " if is_snp else ""
+            res_emoji = {"WIN": "✅", "LOSS": "❌", "BREAKEVEN": "🛡️"}.get(res, "⏳")
+            pnl_txt = f"+{pnl:.1f}R" if pnl > 0 else f"{pnl:.1f}R" if pnl < 0 else "0R"
+            net_r += pnl
+            lines.append(f"{i}. {snp_tag}{name} [{tier}]: {res_emoji} {res} ({pnl_txt})")
+
+        net_emoji = "🏆" if net_r > 0 else ("🛡️" if net_r == 0 else "📉")
+        net_txt   = f"+{net_r:.1f}R" if net_r > 0 else f"{net_r:.1f}R"
+        ledger_msg = (
+            f"📋 DAILY TRADE LEDGER\n"
+            f"{'-'*28}\n"
+            + "\n".join(lines) +
+            f"\n{'-'*28}\n"
+            f"Total: {len(today_trades)} ({wins}W - {losses}L - {bes}BE)\n"
+            f"Net Result: {net_txt} {net_emoji}"
+        )
+        print(ledger_msg)
+        send_tg(ledger_msg)
+    else:
+        print("[DAILY LEDGER] No closed trades today.")
+
+# ============================================================
 # AUTO WEEKLY SUNDAY REPORT (No manual trigger needed)
 # ============================================================
 now_cam = pd.Timestamp.now(tz="UTC").tz_convert("Asia/Phnom_Penh")
@@ -1010,5 +1146,5 @@ if "--heartbeat" in sys.argv:
     send_tg(heartbeat_msg)
 
 print("\n" + "="*90)
-print("ADAPTIVE ENGINE v3.0 COMPLETE - 22 Modules Active!")
+print("ADAPTIVE ENGINE v4.1 COMPLETE - Dual-Engine | Smart Learning | Daily Ledger")
 print("="*90 + "\n")
