@@ -315,6 +315,73 @@ def detect_fvg(df, lookback=50):
     return fvgs
 
 # ============================================================
+# A2c: ORDER BLOCK DETECTOR (Stage A Sniper Upgrade)
+# An Order Block is the last opposing candle before a strong
+# impulse move — the exact candle where institutions entered.
+# ============================================================
+def detect_order_blocks(df, lookback=60):
+    """
+    Scans for Order Blocks near current price.
+    BUY Order Block:  Last bearish (red) candle before a strong bullish impulse.
+    SELL Order Block: Last bullish (green) candle before a strong bearish impulse.
+    Returns list of OB zones with top/bot/type.
+    """
+    obs = []
+    if len(df) < lookback + 5:
+        return obs
+
+    atr = float(df.iloc[-1].get("ATR", 0.001))
+    current_close = float(df.iloc[-1]["Close"])
+    start = max(4, len(df) - lookback)
+
+    for i in range(start, len(df) - 3):
+        c0 = df.iloc[i]       # Candidate OB candle
+        c1 = df.iloc[i + 1]   # Impulse candle 1
+        c2 = df.iloc[i + 2]   # Impulse candle 2
+
+        o0, c_0 = float(c0["Open"]), float(c0["Close"])
+        h0, l0  = float(c0["High"]), float(c0["Low"])
+        h1, l1  = float(c1["High"]), float(c1["Low"])
+        h2, l2  = float(c2["High"]), float(c2["Low"])
+
+        # Strong impulse = two consecutive candles moving strongly in same direction
+        bullish_impulse = (h1 > h0 + atr * 0.5) and (h2 > h1)
+        bearish_impulse = (l1 < l0 - atr * 0.5) and (l2 < l1)
+
+        # BUY Order Block: bearish candle (red) before bullish impulse
+        if c_0 < o0 and bullish_impulse:   # Red candle before up-move
+            ob_top = max(o0, c_0)          # Top of the OB candle body
+            ob_bot = min(o0, c_0)          # Bot of the OB candle body
+            # Only valid if current price is near or inside the OB zone
+            if ob_bot - atr * 0.3 <= current_close <= ob_top + atr * 0.5:
+                obs.append({"type": "BUY", "top": ob_top, "bot": ob_bot,
+                             "high": h0, "low": l0})
+
+        # SELL Order Block: bullish candle (green) before bearish impulse
+        if c_0 > o0 and bearish_impulse:   # Green candle before down-move
+            ob_top = max(o0, c_0)
+            ob_bot = min(o0, c_0)
+            if ob_bot - atr * 0.5 <= current_close <= ob_top + atr * 0.3:
+                obs.append({"type": "SELL", "top": ob_top, "bot": ob_bot,
+                             "high": h0, "low": l0})
+    return obs
+
+def find_confluence(fvg, order_blocks, atr):
+    """
+    Checks if an FVG overlaps with an Order Block of the same direction.
+    Returns (has_confluence: bool, ob: dict | None)
+    """
+    for ob in order_blocks:
+        if ob["type"] != fvg["action"].replace("BUY","BUY").replace("SELL","SELL"):
+            continue
+        # Check overlap: OB zone and FVG zone share price territory
+        overlap_top = min(fvg["top"], ob["top"])
+        overlap_bot = max(fvg["bot"], ob["bot"])
+        if overlap_top >= overlap_bot - atr * 0.2:  # Zones touch or overlap
+            return True, ob
+    return False, None
+
+# ============================================================
 # A2: SUPPORT/RESISTANCE ZONE MAPPER
 # ============================================================
 def find_sr_zones(df, tolerance_mult=0.5):
@@ -1058,12 +1125,22 @@ if not news_blocked and not circuit_tripped:
         active_fvgs = detect_fvg(df, lookback=80)
         if not active_fvgs: continue
 
+        # STAGE A: Detect Order Blocks for confluence check
+        order_blocks = detect_order_blocks(df, lookback=60)
+
         for fvg in active_fvgs:
             action = fvg["action"]
 
             # Confluence filter: FVG must align with trend direction
             if action == "BUY" and close < ema200: continue   # Only buy FVGs in uptrends
             if action == "SELL" and close > ema200: continue  # Only sell FVGs in downtrends
+
+            # STAGE A: Order Block + FVG Confluence Check
+            # Both must exist at the same price level to fire
+            has_ob, matched_ob = find_confluence(fvg, order_blocks, atr)
+            if not has_ob:
+                print(f"  [OB FILTER] {asset['name']} {action} FVG rejected — no Order Block confluence")
+                continue
 
             # Sniper signal ID (unique per asset + action + FVG zone)
             sniper_id = f"SNIPER_{sym}_{action}_{fvg['bot']:.5f}_{fvg['top']:.5f}"
@@ -1081,29 +1158,40 @@ if not news_blocked and not circuit_tripped:
             if ml_prob < 0.45: continue
             if mscore < 0: continue
 
-            # Entry is mid-gap (best institutional fill)
-            entry = (fvg["top"] + fvg["bot"]) / 2
-            sl_dist = fvg["size"] * 0.5 + atr * 0.3  # Tight SL just beyond gap
+            # STAGE A: 50% FVG midpoint entry (enforced) + OB-based Stop Loss
+            entry = (fvg["top"] + fvg["bot"]) / 2  # Strict 50% midpoint
+
+            # SL sits just beyond the Order Block boundary (tighter than before)
+            if matched_ob:
+                if action == "BUY":
+                    sl_p = matched_ob["low"] - atr * 0.2   # Just below OB wick
+                else:
+                    sl_p = matched_ob["high"] + atr * 0.2  # Just above OB wick
+            else:
+                # Fallback (shouldn't reach here after OB filter, but safe)
+                sl_dist = fvg["size"] * 0.5 + atr * 0.3
+                sl_p = entry - sl_dist if action == "BUY" else entry + sl_dist
+
+            sl_dist = abs(entry - sl_p)
             tp_dist = sl_dist * SNIPER_RR
 
             if action == "BUY":
-                sl_p  = entry - sl_dist
                 tp1_p = entry + sl_dist
                 tp2_p = entry + tp_dist
             else:
-                sl_p  = entry + sl_dist
                 tp1_p = entry - sl_dist
                 tp2_p = entry - tp_dist
 
             thesis, _ = run_gemini_copilot(asset["name"], action, rsi, adx, minfo,
                                            f"Bullish FVG void fill" if action=="BUY" else "Bearish FVG void fill")
 
+            actual_rr = round(tp_dist / sl_dist, 1) if sl_dist > 0 else SNIPER_RR
             action_emoji = "🟢" if action == "BUY" else "🔴"
             sniper_card = (
                 f"🔥 SNIPER {action_emoji} {action} {asset['name']} [A+]\n"
-                f"(Liquidity Void Fill | 1:{int(SNIPER_RR)} RR)\n"
-                f"Entry: {entry:.5f}\n"
-                f"SL: {sl_p:.5f}\n"
+                f"(FVG + Order Block Confluence | 1:{actual_rr} RR)\n"
+                f"Entry: {entry:.5f}  ← 50% FVG Midpoint\n"
+                f"SL: {sl_p:.5f}  ← Below Order Block\n"
                 f"TP1: {tp1_p:.5f}\n"
                 f"TP2: {tp2_p:.5f}\n\n"
                 f"🤖 \"{thesis}\""
@@ -1227,5 +1315,5 @@ if "--heartbeat" in sys.argv:
     send_tg(heartbeat_msg)
 
 print("\n" + "="*90)
-print("ADAPTIVE ENGINE v4.3 COMPLETE - 17 Assets | 4 Precision Filters | Smart Learning | Daily Ledger")
+print("ADAPTIVE ENGINE v4.4 COMPLETE - 17 Assets | Stage A Sniper | 4 Precision Filters | Smart Learning")
 print("="*90 + "\n")
