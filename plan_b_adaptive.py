@@ -10,14 +10,17 @@ ADAPTIVE (A1-A8): Patterns | S/R Zones | Loss Learner | ML Retrain |
                    Multi-TF Scalper | Confidence | Tiered Quality |
                    A8: Gemini NLP News Sentiment & Trade Thesis Copilot
 
-NEW in v4.1 (Smart Learning):
+NEW in v4.3 (Signal Precision Filters):
   - ENGINE 1 (Standard): Liquidity Trifecta - Trend + RSI Pullback + Sweep/Pattern
   - ENGINE 2 (Sniper):   Fair Value Gap (FVG) Matrix - Institutional liquidity void fills
-  - Sniper signals tagged with 🔥 SNIPER on Telegram (1:5+ Risk/Reward)
   - WEIGHTED MEMORY: Old losses fade naturally (never fully deleted, just discounted)
   - REGIME-AWARE MEMORY: Lessons applied only when market conditions match
   - SOFT SCORE PENALTY: Learning reduces signal score, never hard-blocks trading
   - DAILY TRADE LEDGER: End-of-day scorecard sent to Telegram automatically
+  - VIX PANIC PAUSE: Auto-pauses/reduces size when market fear is extreme
+  - DAY-OF-WEEK FILTER: Blocks Monday AM and Friday PM dead zones
+  - VOLUME GATE: Only fires signals when institutional volume confirms the move
+  - 4H TREND GATE: Upgraded MTF checks 4H + Daily alignment
 
 100% FREE ($0.00). GitHub Cloud Automated. PC Stays OFF.
 ===============================================================================
@@ -667,14 +670,37 @@ def regime(bar):
     return "TREND" if adx>ADX_TREND_TH and bbw>1.5*bwa else "RANGE"
 
 def check_mtf(sym, action):
+    """4H + Daily trend gate. Both timeframes must agree with signal direction."""
     for p,iv in [("60d","4h"),("400d","1d")]:
         df=fetch_df(sym,p,iv)
         if df is None or len(df)<50: return False
         ema=df["Close"].ewm(span=200,adjust=False).mean().iloc[-1]
+        ema50=df["Close"].ewm(span=50,adjust=False).mean().iloc[-1]
         c=float(df["Close"].iloc[-1])
-        if action=="BUY" and c<=ema: return False
-        if action=="SELL" and c>=ema: return False
+        # Price must be on correct side of EMA200 AND EMA50 must slope correctly
+        if action=="BUY":
+            if c<=ema: return False           # Price below EMA200 = no buy
+            if ema50<=ema: return False        # EMA50 below EMA200 = downtrend
+        if action=="SELL":
+            if c>=ema: return False            # Price above EMA200 = no sell
+            if ema50>=ema: return False        # EMA50 above EMA200 = uptrend
     return True
+
+def check_volume(df, i, lookback=20):
+    """Volume gate: current candle volume must be above the rolling average.
+    Returns (passes: bool, ratio: float)
+    """
+    if "Volume" not in df.columns: return True, 1.0   # No volume data = pass (e.g. Forex)
+    try:
+        vol_series = df["Volume"].iloc[max(0,i-lookback):i+1]
+        if len(vol_series) < 5: return True, 1.0
+        avg_vol = vol_series.iloc[:-1].mean()
+        cur_vol = float(df["Volume"].iloc[i])
+        if avg_vol <= 0: return True, 1.0
+        ratio = cur_vol / avg_vol
+        return ratio >= 0.85, round(ratio, 2)   # Must be at least 85% of average
+    except:
+        return True, 1.0
 
 def detect_sweep(df, i, action):
     if i<2: return False, 0
@@ -821,9 +847,47 @@ rusd = RISK_USD
 
 # Remove the old circuit breaker block (replaced by win/loss based one above)
 
+# ============================================================
+# PRECISION FILTER 1: VIX PANIC PAUSE
+# ============================================================
+vix_level = 0.0
+try:
+    vdf = fetch_df("^VIX", "5d", "1d")
+    if vdf is not None and not vdf.empty:
+        vix_level = float(vdf["Close"].ffill().iloc[-1])
+except: pass
+
+vix_panic   = vix_level >= 40   # Full pause — extreme market crash
+vix_caution = vix_level >= 28   # Half size — elevated fear
+if vix_panic:
+    send_tg(f"🚨 VIX PANIC PAUSE ACTIVE (VIX={vix_level:.1f})\nMarket in extreme fear. All new signals paused until VIX < 40.")
+    print(f"  [VIX PAUSE] PANIC — VIX={vix_level:.1f} ≥ 40. No new signals.")
+elif vix_caution:
+    print(f"  [VIX CAUTION] VIX={vix_level:.1f} ≥ 28 — position sizes halved.")
+else:
+    print(f"  [VIX] Normal — VIX={vix_level:.1f}")
+
+# ============================================================
+# PRECISION FILTER 2: DAY-OF-WEEK DEAD ZONE FILTER
+# ============================================================
+now_london_dw = pd.Timestamp.now(tz="UTC").tz_convert(LONDON_TZ)
+dow           = now_london_dw.day_of_week   # 0=Mon, 4=Fri
+london_hour   = now_london_dw.hour
+
+# Monday before 10 AM London: market still gapping from weekend
+# Friday after 15:00 London: banks closing positions, volume dries up
+dead_zone = (dow == 0 and london_hour < 10) or (dow == 4 and london_hour >= 15)
+if dead_zone:
+    dz_reason = "Monday pre-open (market gapping)" if dow == 0 else "Friday close (volume drying up)"
+    print(f"  [DAY FILTER] Dead zone — {dz_reason}. Signals paused.")
+else:
+    print(f"  [DAY FILTER] OK — Day={['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][dow]}, Hour={london_hour}:00 London")
+
+# ============================================================
 # MULTI-TIMEFRAME SCANNER
+# ============================================================
 sig_count = 0
-if not news_blocked and not circuit_tripped:
+if not news_blocked and not circuit_tripped and not vix_panic and not dead_zone:
     scan_configs = [
         {"interval": "1h",  "period": "30d", "label": "1H Swing",  "rr": 3.5, "min_bars": 200},
         {"interval": "15m", "period": "5d",  "label": "15M Scalp", "rr": 3.0, "min_bars": 100},
@@ -832,6 +896,11 @@ elif news_blocked:
     print(f"  [NEWS BLOCK] Signals paused: {news_reason}")
     sig_count = 0
     scan_configs = []  # empty — no scan during news
+elif vix_panic:
+    print(f"  [VIX PAUSE] All signals paused — VIX={vix_level:.1f}")
+    scan_configs = []
+elif dead_zone:
+    scan_configs = []
 else:
     scan_configs = []
 
@@ -904,6 +973,16 @@ for scan in scan_configs:
             conf_adj = conf_adj * (1.0 - learn_penalty)  # Apply learning penalty softly
 
             if scan["interval"] == "1h" and not check_mtf(sym, action): continue
+
+            # PRECISION FILTER 3: VOLUME GATE
+            vol_ok, vol_ratio = check_volume(df, i)
+            if not vol_ok:
+                print(f"  [VOLUME GATE] {asset['name']} rejected — volume ratio {vol_ratio:.2f} < 0.85")
+                continue
+
+            # PRECISION FILTER 4: VIX Caution — halve position size
+            if vix_caution:
+                rusd = RISK_USD * 0.5
 
             thesis, gemini_sentiment = run_gemini_copilot(asset["name"], action, rsi, adx, minfo, pat_txt)
 
@@ -1148,5 +1227,5 @@ if "--heartbeat" in sys.argv:
     send_tg(heartbeat_msg)
 
 print("\n" + "="*90)
-print("ADAPTIVE ENGINE v4.2 COMPLETE - 17 Assets | Smart Learning | Daily Ledger")
+print("ADAPTIVE ENGINE v4.3 COMPLETE - 17 Assets | 4 Precision Filters | Smart Learning | Daily Ledger")
 print("="*90 + "\n")
