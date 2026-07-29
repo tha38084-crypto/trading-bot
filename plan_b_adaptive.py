@@ -382,6 +382,111 @@ def find_confluence(fvg, order_blocks, atr):
     return False, None
 
 # ============================================================
+# A2d: CONFIRMATION CANDLE DETECTOR (Stage B1 Sniper Upgrade)
+# Waits for a specific reversal candlestick to form inside the
+# FVG/OB zone before firing — proof institutions are defending.
+# ============================================================
+def detect_confirmation_candle(df, action):
+    """
+    Checks the last two candles for a reversal pattern.
+    BUY patterns: Hammer, Bullish Engulfing
+    SELL patterns: Shooting Star, Bearish Engulfing
+    Returns (confirmed: bool, candle_name: str)
+    """
+    if len(df) < 3:
+        return False, ""
+
+    curr = df.iloc[-1]
+    prev = df.iloc[-2]
+
+    o_c, c_c = float(curr["Open"]), float(curr["Close"])
+    h_c, l_c = float(curr["High"]), float(curr["Low"])
+    o_p, c_p = float(prev["Open"]), float(prev["Close"])
+
+    body_c      = abs(c_c - o_c)
+    candle_range = h_c - l_c
+    if candle_range < 1e-9:
+        return False, ""
+
+    lower_wick  = min(o_c, c_c) - l_c
+    upper_wick  = h_c - max(o_c, c_c)
+
+    if action == "BUY":
+        # --- Hammer: long lower wick, small body at top, tiny upper wick ---
+        if (body_c > 0 and
+                lower_wick >= 2.0 * body_c and
+                upper_wick <= body_c * 0.5 and
+                lower_wick >= candle_range * 0.55):
+            return True, "Hammer"
+
+        # --- Bullish Engulfing: green candle swallows previous red candle ---
+        prev_bearish = c_p < o_p
+        curr_bullish = c_c > o_c
+        if (prev_bearish and curr_bullish and
+                o_c <= c_p and c_c >= o_p):
+            return True, "Bullish Engulfing"
+
+    elif action == "SELL":
+        # --- Shooting Star: long upper wick, small body at bottom ---
+        if (body_c > 0 and
+                upper_wick >= 2.0 * body_c and
+                lower_wick <= body_c * 0.5 and
+                upper_wick >= candle_range * 0.55):
+            return True, "Shooting Star"
+
+        # --- Bearish Engulfing: red candle swallows previous green candle ---
+        prev_bullish = c_p > o_p
+        curr_bearish = c_c < o_c
+        if (prev_bullish and curr_bearish and
+                o_c >= c_p and c_c <= o_p):
+            return True, "Bearish Engulfing"
+
+    return False, ""
+
+# ============================================================
+# A2e: LIQUIDITY SWEEP DETECTOR (Stage B2 Sniper Upgrade)
+# Institutional stop hunt: price spikes below/above OB to
+# trigger retail stops, then immediately reverses.
+# This is the highest-conviction Sniper entry in existence.
+# ============================================================
+def detect_liquidity_sweep(df, matched_ob, action, atr):
+    """
+    Checks if the previous candle swept liquidity below/above the
+    Order Block boundary, and the current candle reversed back.
+    BUY sweep: prev Low < OB bottom, current Close > OB bottom
+    SELL sweep: prev High > OB top, current Close < OB top
+    Returns (swept: bool, sweep_price: float)
+    """
+    if len(df) < 3 or matched_ob is None:
+        return False, 0.0
+
+    prev      = df.iloc[-2]
+    curr      = df.iloc[-1]
+    prev_low  = float(prev["Low"])
+    prev_high = float(prev["High"])
+    curr_close = float(curr["Close"])
+    ob_bot    = matched_ob["bot"]
+    ob_top    = matched_ob["top"]
+
+    if action == "BUY":
+        # Prev candle spiked BELOW OB bottom (hunting retail stop losses)
+        # Current candle closes BACK ABOVE OB bottom (institutions reversed)
+        swept        = prev_low < ob_bot - atr * 0.05
+        reversed_back = curr_close > ob_bot
+        if swept and reversed_back:
+            return True, prev_low
+
+    elif action == "SELL":
+        # Prev candle spiked ABOVE OB top (hunting retail stop losses)
+        # Current candle closes BACK BELOW OB top (institutions reversed)
+        swept        = prev_high > ob_top + atr * 0.05
+        reversed_back = curr_close < ob_top
+        if swept and reversed_back:
+            return True, prev_high
+
+    return False, 0.0
+
+# ============================================================
 # A2: SUPPORT/RESISTANCE ZONE MAPPER
 # ============================================================
 def find_sr_zones(df, tolerance_mult=0.5):
@@ -1142,6 +1247,19 @@ if not news_blocked and not circuit_tripped:
                 print(f"  [OB FILTER] {asset['name']} {action} FVG rejected — no Order Block confluence")
                 continue
 
+            # STAGE B1: Confirmation Candle Check
+            candle_ok, candle_name = detect_confirmation_candle(df, action)
+            if not candle_ok:
+                print(f"  [CANDLE FILTER] {asset['name']} {action} rejected — no confirmation candle at OB zone")
+                continue
+
+            # STAGE B2: Liquidity Sweep Check
+            # The ultimate confirmation — institutions swept retail stops first
+            sweep_ok, sweep_level = detect_liquidity_sweep(df, matched_ob, action, atr)
+            if not sweep_ok:
+                print(f"  [SWEEP FILTER] {asset['name']} {action} rejected — no liquidity sweep detected")
+                continue
+
             # Sniper signal ID (unique per asset + action + FVG zone)
             sniper_id = f"SNIPER_{sym}_{action}_{fvg['bot']:.5f}_{fvg['top']:.5f}"
             if sniper_id in sent: continue
@@ -1187,13 +1305,15 @@ if not news_blocked and not circuit_tripped:
 
             actual_rr = round(tp_dist / sl_dist, 1) if sl_dist > 0 else SNIPER_RR
             action_emoji = "🟢" if action == "BUY" else "🔴"
+            sweep_txt = f"Swept {sweep_level:.5f}" if sweep_ok else ""
             sniper_card = (
                 f"🔥 SNIPER {action_emoji} {action} {asset['name']} [A+]\n"
-                f"(FVG + Order Block Confluence | 1:{actual_rr} RR)\n"
+                f"(FVG + OB + {candle_name} + Sweep | 1:{actual_rr} RR)\n"
                 f"Entry: {entry:.5f}  ← 50% FVG Midpoint\n"
                 f"SL: {sl_p:.5f}  ← Below Order Block\n"
                 f"TP1: {tp1_p:.5f}\n"
-                f"TP2: {tp2_p:.5f}\n\n"
+                f"TP2: {tp2_p:.5f}\n"
+                f"🔍 Liquidity Swept: {sweep_txt}\n\n"
                 f"🤖 \"{thesis}\""
             )
 
@@ -1315,5 +1435,5 @@ if "--heartbeat" in sys.argv:
     send_tg(heartbeat_msg)
 
 print("\n" + "="*90)
-print("ADAPTIVE ENGINE v4.4 COMPLETE - 17 Assets | Stage A Sniper | 4 Precision Filters | Smart Learning")
+print("ADAPTIVE ENGINE v4.5 COMPLETE - 17 Assets | Full Stage B Sniper (FVG+OB+Candle+Sweep) | 4 Precision Filters")
 print("="*90 + "\n")
