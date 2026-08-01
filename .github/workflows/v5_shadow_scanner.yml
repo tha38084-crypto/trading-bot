@@ -1,0 +1,41 @@
+name: V5.0 Shadow Bot - Asian Range Sweep Scanner
+
+on:
+  schedule:
+    # Runs every hour from 6 AM to 8 PM (UTC), Monday to Friday
+    # Covers London (07-11) and NY (13-16) sessions
+    - cron: '0 6-20 * * 1-5'
+  workflow_dispatch:  # Manual trigger from GitHub website
+
+jobs:
+  run-v5-scanner:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install yfinance numpy pandas pytz
+
+      - name: Run V5.0 Shadow Bot Scanner
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python v5_shadow_bot.py
+
+      - name: Persist V5 State Files
+        run: |
+          git config --global user.name 'V5-Shadow-Bot'
+          git config --global user.email 'bot@v5shadow.ai'
+          git add v5_sent_signals.json v5_streak.json || true
+          git commit -m "V5 shadow bot state update [skip ci]" || true
+          git push || true
