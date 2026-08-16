@@ -1,11 +1,10 @@
 name: V5.0 Shadow Bot - Asian Range Sweep Scanner
 
+# on:
+#   schedule:
+#     - cron: '0 6-20 * * 1-5'
 on:
-  schedule:
-    # Runs every hour from 6 AM to 8 PM (UTC), Monday to Friday
-    # Covers London (07-11) and NY (13-16) sessions
-    - cron: '0 6-20 * * 1-5'
-  workflow_dispatch:  # Manual trigger from GitHub website
+  workflow_dispatch:  # Manual trigger only
 
 jobs:
   run-v5-scanner:
