@@ -36,9 +36,9 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
     except Exception: pass
 
 
-# ── Configuration ──────────────────────────────────────────────────────────
-BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
-CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
+# ── Configuration (With Bulletproof Fallbacks) ─────────────────────────────
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8805795541:AAFQxtzJrvJQlfBVazkVm4KwvSh9FSgfDro")
+CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "5477873575")
 
 # Try loading from .env if not in environment
 if not BOT_TOKEN or not CHAT_ID:
