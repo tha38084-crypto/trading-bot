@@ -54,11 +54,13 @@ if not BOT_TOKEN or not CHAT_ID:
 
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "apex_fvg_state.json")
 
-# Asset Universe
+# Asset Universe (The Magnificent 7)
 ASSETS = {
     "GC=F":     {"name": "GOLD (XAU/USD)", "emoji": "🥇", "pv": 100.0,
                  "sessions": list(range(7, 18))},
     "NQ=F":     {"name": "NASDAQ (US100)", "emoji": "📈", "pv": 2.0,
+                 "sessions": list(range(13, 21))},
+    "ES=F":     {"name": "S&P 500 (US500)", "emoji": "📊", "pv": 5.0,
                  "sessions": list(range(13, 21))},
     "BTC-USD":  {"name": "BITCOIN (BTC/USD)", "emoji": "₿", "pv": 1.0,
                  "sessions": list(range(7, 21))},
