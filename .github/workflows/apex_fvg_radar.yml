@@ -2,8 +2,8 @@ name: Apex FVG Radar (24/7 Signal Scanner)
 
 on:
   schedule:
-    # Runs every 15 minutes 24/7/365 (Scanning Crypto 24/7 + Gold/Nasdaq/Forex during market hours)
-    - cron: '*/15 * * * *'
+    # Runs every 15 minutes during London & NY high-volume sessions (07:00-21:00 UTC weekdays)
+    - cron: '*/15 7-20 * * 1-5'
   workflow_dispatch:
 
 jobs:
