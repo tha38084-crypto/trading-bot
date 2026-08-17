@@ -57,19 +57,19 @@ STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "apex_fvg_
 # Asset Universe (The Magnificent 7)
 ASSETS = {
     "GC=F":     {"name": "GOLD (XAU/USD)", "emoji": "🥇", "pv": 100.0,
-                 "sessions": list(range(7, 18))},
+                 "sessions": list(range(7, 18))},  # London + NY (2 PM - 1 AM Cambodia)
     "NQ=F":     {"name": "NASDAQ (US100)", "emoji": "📈", "pv": 2.0,
-                 "sessions": list(range(13, 21))},
+                 "sessions": list(range(13, 21))}, # NY Open (8:30 PM - 4 AM Cambodia)
     "ES=F":     {"name": "S&P 500 (US500)", "emoji": "📊", "pv": 5.0,
-                 "sessions": list(range(13, 21))},
+                 "sessions": list(range(13, 21))}, # NY Open (8:30 PM - 4 AM Cambodia)
     "BTC-USD":  {"name": "BITCOIN (BTC/USD)", "emoji": "₿", "pv": 1.0,
-                 "sessions": list(range(7, 21))},
+                 "sessions": list(range(0, 24))},  # 24/7 Full Global Scan (Asian, London, NY)
     "ETH-USD":  {"name": "ETHEREUM (ETH/USD)", "emoji": "⟠", "pv": 1.0,
-                 "sessions": list(range(7, 21))},
+                 "sessions": list(range(0, 24))},  # 24/7 Full Global Scan (Asian, London, NY)
     "GBPUSD=X": {"name": "GBP/USD", "emoji": "🇬🇧", "pv": 10.0,
-                 "sessions": list(range(7, 17))},
+                 "sessions": list(range(7, 17))},  # London + NY (2 PM - 12 AM Cambodia)
     "EURUSD=X": {"name": "EUR/USD", "emoji": "🇪🇺", "pv": 10.0,
-                 "sessions": list(range(7, 17))},
+                 "sessions": list(range(7, 17))},  # London + NY (2 PM - 12 AM Cambodia)
 }
 
 
