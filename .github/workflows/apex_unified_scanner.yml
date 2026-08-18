@@ -1,0 +1,44 @@
+name: Apex Unified Market Radar (Macro FVG + Discount Sweep)
+
+on:
+  schedule:
+    # Runs every 20 minutes from 05:00 UTC to 21:00 UTC (12:00 PM to 4:00 AM Cambodia Time) weekdays
+    - cron: '*/20 5-21 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install yfinance pandas numpy
+
+      - name: Run Engine 1 - Macro FVG Signal Engine
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python apex_fvg_signal_engine.py
+
+      - name: Run Engine 2 - Institutional Discount Sweep Engine
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python apex_discount_sweep_engine.py
+
+      - name: Commit state files
+        run: |
+          git config --global user.name "Apex Radar Bot"
+          git config --global user.email "bot@apex.dev"
+          git add apex_fvg_state.json apex_discount_sweep_state.json || true
+          git diff --cached --quiet || git commit -m "Update dual engine signal state [skip ci]"
+          git push || true
