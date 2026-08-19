@@ -274,25 +274,21 @@ def format_signal(symbol: str, asset_info: dict, sig: dict) -> str:
     fvg_bottom_str = f"{sig['fvg_bottom']:.{prec}f}"
     swept_str = f"{sig['swept_level']:.{prec}f}"
 
-    msg = (
-        f"🎯 <b>[ APEX ORDER FLOW &amp; FVG SIGNAL ]</b> 🎯\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"Asset: {asset_info['emoji']} <b>{asset_info['name']}</b>\n"
-        f"Direction: {sig['direction_emoji']} <b>{sig['direction']}</b> ({sig['context']})\n"
-        f"Session: {session}\n"
-        f"\n"
-        f"📍 <b>FVG Entry Zone:</b> {fvg_bottom_str} — {fvg_top_str}\n"
-        f"💰 <b>Entry Price:</b> {entry_str}\n"
-        f"🎯 <b>Take Profit (1:2.2 R:R):</b> {tp_str}\n"
-        f"🛑 <b>Stop Loss (Invalidation):</b> {sl_str}\n"
-        f"\n"
-        f"💡 <i>Swept level {swept_str} to trap "
-        f"{'breakout sellers' if sig['direction'] == 'BUY' else 'breakout buyers'}, "
-        f"then created an aggressive "
-        f"{'Bullish' if sig['direction'] == 'BUY' else 'Bearish'} FVG displacement.</i>\n"
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"⏰ {now_utc.strftime('%Y-%m-%d %H:%M UTC')}"
-    )
+    action_text = f"🟢 BUY {asset_info['name']}" if sig['direction'] == 'BUY' else f"🔴 SELL {asset_info['name']}"
+    sl_pts = abs(sig['entry'] - sig['sl'])
+    tp_pts = abs(sig['tp'] - sig['entry'])
+
+    msg = f"""━━━━━━━━━━━━━━━━━━━━━━━━━━
+<b>{action_text}</b>
+⏱ <b>1-Hour Chart | {session}</b>
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+💰 <b>ENTRY :</b> <code>{entry_str}</code>
+🛑 <b>SL    :</b> <code>{sl_str}</code> (-{sl_pts:,.{prec}f} pts)
+🎯 <b>TP    :</b> <code>{tp_str}</code> (+{tp_pts:,.{prec}f} pts | 1:2.2 R:R)
+📦 <b>SIZE  :</b> <code>2 clips of 0.05 lots</code>
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 <b>Rule:</b> Macro FVG setup. Hold for full target!
+📊 <b>Rationale:</b> Swept {swept_str} + FVG Displacement"""
     return msg
 
 
