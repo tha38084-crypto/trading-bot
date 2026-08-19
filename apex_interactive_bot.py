@@ -167,7 +167,7 @@ def run_full_market_scan() -> str:
     import pandas as pd
     import numpy as np
 
-    setups = []
+    candidates = []
     status_lines = []
 
     for sym, meta in ASSETS.items():
@@ -199,6 +199,7 @@ def run_full_market_scan() -> str:
             df = df.dropna()
             cur = df.iloc[-1]
             c = float(cur["Close"])
+            o = float(cur["Open"])
             rsi = float(cur["RSI"])
             range_pct = float(cur["Range_Pct"])
             atr = float(cur["ATR"])
@@ -206,12 +207,22 @@ def run_full_market_scan() -> str:
             sl_dist = 0.2 * atr
             if sl_dist < 0.15 * atr: sl_dist = 0.15 * atr
 
-            # Buy Setup
-            if range_pct <= 35 and rsi <= 38:
+            # Status line for the overview table
+            if range_pct <= 35: zone_tag = "🟢 Disc"
+            elif range_pct >= 65: zone_tag = "🔴 Prem"
+            else: zone_tag = "⚪ Mid"
+            short_name = name.split()[0]
+            status_lines.append(f"{emoji} <b>{short_name:<8}:</b> <code>{c:,.{digits}f}</code> | {range_pct:4.0f}% {zone_tag} | RSI: {rsi:3.0f}")
+
+            # STRICT BUY: Deep Discount + RSI Oversold + MUST BE GREEN CANDLE (Close > Open)
+            if range_pct <= 30 and rsi <= 35 and c > o:
                 sl = c - sl_dist; tp1 = c + sl_dist; tp2 = c + (2.5 * sl_dist)
-                setups.append(f"""━━━━━━━━━━━━━━━━━━━━━━━━━━
-<b>🟢 BUY {name}</b>
-⏱ <b>15-Minute Chart | 🎯 Live Scan</b>
+                score = (35 - range_pct) + (35 - rsi)
+                candidates.append({
+                    "score": score,
+                    "text": f"""━━━━━━━━━━━━━━━━━━━━━━━━━━
+<b>🟢 TOP PICK: BUY {name}</b>
+⏱ <b>15-Minute Chart | 🎯 High-Conviction Setup</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 💰 <b>ENTRY :</b> <code>{c:,.{digits}f}</code>
 🛑 <b>SL    :</b> <code>{sl:,.{digits}f}</code> (-{sl_dist:,.{digits}f} pts)
@@ -220,14 +231,18 @@ def run_full_market_scan() -> str:
 📦 <b>SIZE  :</b> <code>{cent_lot}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 💡 <b>Rule:</b> At TP1, close 1 clip & move SL to entry!
-📊 <b>Rationale:</b> {range_pct:.1f}% 24h Discount + RSI {rsi:.1f} Oversold""")
+📊 <b>Rationale:</b> {range_pct:.1f}% Discount + RSI {rsi:.1f} + Bullish Candle"""
+                })
 
-            # Sell Setup
-            elif range_pct >= 65 and rsi >= 62:
+            # STRICT SELL: High Premium + RSI Overbought + MUST BE RED CANDLE (Close < Open)
+            elif range_pct >= 70 and rsi >= 65 and c < o:
                 sl = c + sl_dist; tp1 = c - sl_dist; tp2 = c - (2.5 * sl_dist)
-                setups.append(f"""━━━━━━━━━━━━━━━━━━━━━━━━━━
-<b>🔴 SELL {name}</b>
-⏱ <b>15-Minute Chart | 🎯 Live Scan</b>
+                score = (range_pct - 70) + (rsi - 65)
+                candidates.append({
+                    "score": score,
+                    "text": f"""━━━━━━━━━━━━━━━━━━━━━━━━━━
+<b>🔴 TOP PICK: SELL {name}</b>
+⏱ <b>15-Minute Chart | 🎯 High-Conviction Setup</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 💰 <b>ENTRY :</b> <code>{c:,.{digits}f}</code>
 🛑 <b>SL    :</b> <code>{sl:,.{digits}f}</code> (-{sl_dist:,.{digits}f} pts)
@@ -236,26 +251,25 @@ def run_full_market_scan() -> str:
 📦 <b>SIZE  :</b> <code>{cent_lot}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 💡 <b>Rule:</b> At TP1, close 1 clip & move SL to entry!
-📊 <b>Rationale:</b> {range_pct:.1f}% 24h Premium + RSI {rsi:.1f} Overbought""")
-
-            else:
-                zone = "🟢 Disc" if range_pct <= 35 else ("🔴 Prem" if range_pct >= 65 else "⚪ Mid")
-                status_lines.append(f"• {emoji} <b>{name[:8]}:</b> <code>{c:,.{digits}f}</code> | {range_pct:.0f}% ({zone}) | RSI: {rsi:.0f}")
+📊 <b>Rationale:</b> {range_pct:.1f}% Premium + RSI {rsi:.1f} + Bearish Candle"""
+                })
 
         except Exception as e:
             print(f"Error {sym}: {e}")
 
     now_kh = datetime.now(timezone.utc).strftime('%H:%M UTC')
-    
-    if setups:
-        return "\n\n".join(setups)
+    overview_block = "📡 <b>MARKET OVERVIEW</b> (" + now_kh + ")\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n" + "\n".join(status_lines)
+
+    if candidates:
+        # Pick ONLY the single #1 best setup by score!
+        candidates.sort(key=lambda x: x["score"], reverse=True)
+        best_setup = candidates[0]["text"]
+        return f"{overview_block}\n\n{best_setup}"
     else:
-        overview = "\n".join(status_lines)
-        return f"""📡 <b>MARKET RADAR OVERVIEW ({now_kh})</b>
+        return f"""{overview_block}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-{overview}
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-⏸ <b>Status:</b> All assets currently in mid-range or extension phase. No clean high-probability entry right now. Will alert automatically when a sweep occurs! 🎯"""
+⏸ <b>Status:</b> All assets currently in extension/runaway phase with NO confirmed reversal candle.
+💡 <i>Do not force trades at daily highs. Wait for pullback into discount!</i>"""
 
 
 def get_status_report() -> str:
