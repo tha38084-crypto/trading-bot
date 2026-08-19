@@ -204,14 +204,13 @@ def analyze_asset(symbol: str, meta: dict, state: dict) -> dict | None:
         reason = ""
 
         # ── BUY SETUP: Discount Zone + RSI Oversold + Sweep Low + Green Reversal Candle ──
-        if (range_pct <= 35 or float(prev["Range_Pct"]) <= 35) and (rsi <= 35 or p_rsi <= 30):
-            # Sweep check on prev or cur bar
-            if (p_l <= liq_low and p_c > liq_low) or (l <= liq_low and c > liq_low):
+        if (range_pct <= 35 or float(prev["Range_Pct"]) <= 35) and (rsi <= 38 or p_rsi <= 35):
+            # Sweep check: local sweep OR extreme discount zone <= 25%
+            if (p_l <= liq_low and p_c > liq_low) or (l <= liq_low and c > liq_low) or (range_pct <= 25.0):
                 # Reversal candle confirmation: current candle must be bullish green
-                if c > o:
+                if c > o or p_c > p_o:
                     sig = "BUY"
                     entry = c
-                    # Tight wick SL: 0.2 * ATR below sweep low
                     sweep_low = min(l, p_l)
                     sl_dist = abs(entry - (sweep_low - 0.2 * atr))
                     if sl_dist < 0.2 * atr: sl_dist = 0.2 * atr
@@ -223,10 +222,10 @@ def analyze_asset(symbol: str, meta: dict, state: dict) -> dict | None:
                               f"swept low at {sweep_low:.{digits}f}, confirmed by bullish candle.")
 
         # ── SELL SETUP: Premium Zone + RSI Overbought + Sweep High + Red Reversal Candle ─
-        elif (range_pct >= 65 or float(prev["Range_Pct"]) >= 65) and (rsi >= 65 or p_rsi >= 70):
-            if (p_h >= liq_high and p_c < liq_high) or (h >= liq_high and c < liq_high):
+        elif (range_pct >= 65 or float(prev["Range_Pct"]) >= 65) and (rsi >= 62 or p_rsi >= 65):
+            if (p_h >= liq_high and p_c < liq_high) or (h >= liq_high and c < liq_high) or (range_pct >= 75.0):
                 # Reversal candle confirmation: current candle must be bearish red
-                if c < o:
+                if c < o or p_c < p_o:
                     sig = "SELL"
                     entry = c
                     sweep_high = max(h, p_h)

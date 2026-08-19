@@ -1,4 +1,74 @@
 {
-  "last_signals": {},
-  "history": []
+  "last_signals": {
+    "BTC-USD": {
+      "symbol": "BTC-USD",
+      "name": "BITCOIN (BTC/USD)",
+      "emoji": "\u20bf",
+      "signal": "SELL",
+      "entry": 64741.3203125,
+      "sl": 64955.258258928574,
+      "tp1": 64527.382366071426,
+      "tp2": 64206.475446428565,
+      "sl_dist": 213.93794642857392,
+      "digits": 2,
+      "cent_lot": "3 clips of 0.05 lots",
+      "reason": "Price in Premium (73.8%), RSI overbought (73.0), swept high at 64935.94, confirmed by bearish candle.",
+      "range_pct": 73.82297986205624,
+      "rsi": 72.98679980267747,
+      "time": "2026-08-19T13:03:46.648522+00:00"
+    },
+    "ETH-USD": {
+      "symbol": "ETH-USD",
+      "name": "ETHEREUM (ETH/USD)",
+      "emoji": "\u27e0",
+      "signal": "SELL",
+      "entry": 1931.7099609375,
+      "sl": 1940.9224548339844,
+      "tp1": 1922.4974670410156,
+      "tp2": 1908.678726196289,
+      "sl_dist": 9.212493896484375,
+      "digits": 2,
+      "cent_lot": "3 clips of 0.05 lots",
+      "reason": "Price in Premium (80.7%), RSI overbought (73.7), swept high at 1941.18, confirmed by bearish candle.",
+      "range_pct": 80.71661156819368,
+      "rsi": 73.69747638473112,
+      "time": "2026-08-19T13:03:53.251826+00:00"
+    }
+  },
+  "history": [
+    {
+      "symbol": "BTC-USD",
+      "name": "BITCOIN (BTC/USD)",
+      "emoji": "\u20bf",
+      "signal": "SELL",
+      "entry": 64741.3203125,
+      "sl": 64955.258258928574,
+      "tp1": 64527.382366071426,
+      "tp2": 64206.475446428565,
+      "sl_dist": 213.93794642857392,
+      "digits": 2,
+      "cent_lot": "3 clips of 0.05 lots",
+      "reason": "Price in Premium (73.8%), RSI overbought (73.0), swept high at 64935.94, confirmed by bearish candle.",
+      "range_pct": 73.82297986205624,
+      "rsi": 72.98679980267747,
+      "time": "2026-08-19T13:03:46.648522+00:00"
+    },
+    {
+      "symbol": "ETH-USD",
+      "name": "ETHEREUM (ETH/USD)",
+      "emoji": "\u27e0",
+      "signal": "SELL",
+      "entry": 1931.7099609375,
+      "sl": 1940.9224548339844,
+      "tp1": 1922.4974670410156,
+      "tp2": 1908.678726196289,
+      "sl_dist": 9.212493896484375,
+      "digits": 2,
+      "cent_lot": "3 clips of 0.05 lots",
+      "reason": "Price in Premium (80.7%), RSI overbought (73.7), swept high at 1941.18, confirmed by bearish candle.",
+      "range_pct": 80.71661156819368,
+      "rsi": 73.69747638473112,
+      "time": "2026-08-19T13:03:53.251826+00:00"
+    }
+  ]
 }
