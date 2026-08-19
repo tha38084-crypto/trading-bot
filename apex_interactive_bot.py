@@ -387,13 +387,32 @@ def poll_updates():
                     elif text in ["/status", "status"]:
                         send_message(get_status_report(), reply_to_id=msg_id)
 
-        except Exception as e:
-            print(f"Polling warning: {e}")
-            time.sleep(3)
+def start_health_server():
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    class HealthHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b"Apex Telegram Bot is Live & Running!")
+        def log_message(self, format, *args):
+            pass
+
+    port = int(os.environ.get("PORT", 10000))
+    try:
+        server = HTTPServer(('0.0.0.0', port), HealthHandler)
+        print(f"Health check HTTP server listening on port {port} for Render...")
+        server.serve_forever()
+    except Exception as e:
+        print(f"Health server note: {e}")
 
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--test-scan":
         print(run_full_market_scan())
     else:
+        import threading
+        t = threading.Thread(target=start_health_server, daemon=True)
+        t.start()
         poll_updates()
+

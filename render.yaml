@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: apex-interactive-bot
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python apex_interactive_bot.py
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        value: 8805795541:AAFQxtzJrvJQlfBVazkVm4KwvSh9FSgfDro
+      - key: TELEGRAM_CHAT_ID
+        value: "5477873575"
