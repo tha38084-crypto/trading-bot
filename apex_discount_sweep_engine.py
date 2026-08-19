@@ -196,6 +196,22 @@ def analyze_asset(symbol: str, meta: dict, state: dict) -> dict | None:
         liq_high = float(prev["Liq_High"])
         liq_low = float(prev["Liq_Low"])
 
+        # ── Higher Timeframe (1H) Trend & Momentum Check ──
+        df_1h = yf.download(symbol, period="10d", interval="1h", progress=False)
+        h1_rsi = 50.0
+        h1_ema50 = c
+        if not df_1h.empty and len(df_1h) >= 20:
+            df_1h.columns = [col[0] if isinstance(col, tuple) else col for col in df_1h.columns]
+            d1 = df_1h['Close'].diff()
+            g1 = (d1.where(d1 > 0, 0)).rolling(14).mean()
+            l1 = (-d1.where(d1 < 0, 0)).rolling(14).mean()
+            df_1h['RSI'] = 100 - (100 / (1 + (g1 / l1)))
+            df_1h['EMA50'] = df_1h['Close'].ewm(span=50, adjust=False).mean()
+            df_1h = df_1h.dropna()
+            if not df_1h.empty:
+                h1_rsi = float(df_1h['RSI'].iloc[-1])
+                h1_ema50 = float(df_1h['EMA50'].iloc[-1])
+
         sig = None
         entry = 0.0
         sl = 0.0
@@ -204,10 +220,9 @@ def analyze_asset(symbol: str, meta: dict, state: dict) -> dict | None:
         reason = ""
 
         # ── BUY SETUP: Discount Zone + RSI Oversold + Sweep Low + Green Reversal Candle ──
-        if (range_pct <= 35 or float(prev["Range_Pct"]) <= 35) and (rsi <= 38 or p_rsi <= 35):
-            # Sweep check: local sweep OR extreme discount zone <= 25%
+        # Filter: Do NOT buy if 1H RSI is already overbought (>65)
+        if (range_pct <= 35 or float(prev["Range_Pct"]) <= 35) and (rsi <= 38 or p_rsi <= 35) and h1_rsi <= 65:
             if (p_l <= liq_low and p_c > liq_low) or (l <= liq_low and c > liq_low) or (range_pct <= 25.0):
-                # Reversal candle confirmation: current candle must be bullish green
                 if c > o or p_c > p_o:
                     sig = "BUY"
                     entry = c
@@ -218,27 +233,34 @@ def analyze_asset(symbol: str, meta: dict, state: dict) -> dict | None:
                     sl = entry - sl_dist
                     tp1 = entry + (1.0 * sl_dist)   # TP1 at 1:1
                     tp2 = entry + (2.5 * sl_dist)   # TP2 at 2.5:1 (Champion)
-                    reason = (f"Price in Discount ({range_pct:.1f}%), RSI oversold ({rsi:.1f}), "
-                              f"swept low at {sweep_low:.{digits}f}, confirmed by bullish candle.")
+                    reason = f"{range_pct:.1f}% 24h Discount + RSI {rsi:.1f} Oversold + Bullish Reversal"
 
         # ── SELL SETUP: Premium Zone + RSI Overbought + Sweep High + Red Reversal Candle ─
+        # Filter: Do NOT short against strong 1H runaway trend if 1H RSI is in power zone (>70) and c > h1_ema50
         elif (range_pct >= 65 or float(prev["Range_Pct"]) >= 65) and (rsi >= 62 or p_rsi >= 65):
-            if (p_h >= liq_high and p_c < liq_high) or (h >= liq_high and c < liq_high) or (range_pct >= 75.0):
-                # Reversal candle confirmation: current candle must be bearish red
-                if c < o or p_c < p_o:
-                    sig = "SELL"
-                    entry = c
-                    sweep_high = max(h, p_h)
-                    sl_dist = abs((sweep_high + 0.2 * atr) - entry)
-                    if sl_dist < 0.2 * atr: sl_dist = 0.2 * atr
-                    if sl_dist > 2.5 * atr: sl_dist = 2.5 * atr
-                    sl = entry + sl_dist
-                    tp1 = entry - (1.0 * sl_dist)
-                    tp2 = entry - (2.5 * sl_dist)
-                    reason = (f"Price in Premium ({range_pct:.1f}%), RSI overbought ({rsi:.1f}), "
-                              f"swept high at {sweep_high:.{digits}f}, confirmed by bearish candle.")
+            # Block counter-trend shorts during runaway momentum
+            if h1_rsi < 75 or c < h1_ema50:
+                if (p_h >= liq_high and p_c < liq_high) or (h >= liq_high and c < liq_high) or (range_pct >= 75.0):
+                    if c < o or p_c < p_o:
+                        sig = "SELL"
+                        entry = c
+                        sweep_high = max(h, p_h)
+                        sl_dist = abs((sweep_high + 0.2 * atr) - entry)
+                        if sl_dist < 0.2 * atr: sl_dist = 0.2 * atr
+                        if sl_dist > 2.5 * atr: sl_dist = 2.5 * atr
+                        sl = entry + sl_dist
+                        tp1 = entry - (1.0 * sl_dist)
+                        tp2 = entry - (2.5 * sl_dist)
+                        reason = f"{range_pct:.1f}% 24h Premium + RSI {rsi:.1f} Overbought + Bearish Reversal"
 
         if sig:
+            # Calculate dynamic Confidence Score (0-100%)
+            c_range = min(30, int(abs(range_pct - 50) * 1.2))
+            c_rsi = min(30, int(abs(rsi - 50) * 1.2))
+            c_session = 25 if 12 <= datetime.now(timezone.utc).hour <= 21 else 15
+            conf_pct = min(98, max(65, 50 + c_range + c_rsi + c_session + 10))
+            grade = "A+ (Elite)" if conf_pct >= 90 else ("A (Strong)" if conf_pct >= 80 else "B+ (Good)")
+
             return {
                 "symbol": symbol,
                 "name": name,
@@ -254,6 +276,8 @@ def analyze_asset(symbol: str, meta: dict, state: dict) -> dict | None:
                 "reason": reason,
                 "range_pct": range_pct,
                 "rsi": rsi,
+                "confidence": conf_pct,
+                "grade": grade,
                 "time": datetime.now(timezone.utc).isoformat()
             }
         else:
@@ -275,7 +299,8 @@ def format_signal_message(sig_data: dict) -> str:
     tp2 = sig_data["tp2"]
     digits = sig_data["digits"]
     cent_lot = sig_data["cent_lot"]
-    reason = sig_data["reason"]
+    conf = sig_data.get("confidence", 85)
+    grade = sig_data.get("grade", "A (Strong)")
 
     action_text = f"🟢 BUY {name}" if direction == "BUY" else f"🔴 SELL {name}"
     sl_pts = abs(entry - sl)
@@ -284,6 +309,7 @@ def format_signal_message(sig_data: dict) -> str:
 
     msg = f"""━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>{action_text}</b>
+⭐️ <b>Confidence:</b> {conf}% ({grade})
 ⏱ <b>15-Minute Chart | 🗽 Active Session</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 💰 <b>ENTRY :</b> <code>{entry:,.{digits}f}</code>
@@ -292,8 +318,7 @@ def format_signal_message(sig_data: dict) -> str:
 🎯 <b>TP2   :</b> <code>{tp2:,.{digits}f}</code> (+{tp2_pts:,.{digits}f} pts | Runner)
 📦 <b>SIZE  :</b> <code>{cent_lot}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 <b>Rule:</b> At TP1, close 1 clip & move SL to entry!
-📊 <b>Rationale:</b> {reason}"""
+💡 <b>Rule:</b> At TP1, close 1 clip & move SL to entry!"""
     return msg
 
 
