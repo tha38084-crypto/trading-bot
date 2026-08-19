@@ -112,13 +112,19 @@ def run_single_asset_analysis(symbol: str) -> str:
         if sl_dist < 0.15 * atr: sl_dist = 0.15 * atr
 
         # Buy Setup (Discount)
-        if range_pct <= 35 and rsi <= 38:
+        if range_pct <= 35 and rsi <= 38 and c > float(cur["Open"]):
             sl = c - sl_dist
             tp1 = c + (1.0 * sl_dist)
             tp2 = c + (2.5 * sl_dist)
+            c_range = min(30, int((35 - range_pct) * 1.5))
+            c_rsi = min(30, int((38 - rsi) * 1.5))
+            c_session = 25 if 12 <= datetime.now(timezone.utc).hour <= 21 else 15
+            conf_pct = min(98, max(65, 50 + c_range + c_rsi + c_session + 15))
+            grade = "A+ (Elite)" if conf_pct >= 90 else ("A (Strong)" if conf_pct >= 80 else "B+ (Good)")
             return f"""━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>🟢 BUY {name}</b>
-⏱ <b>15-Minute Chart | 🎯 On-Demand Scan</b>
+⭐️ <b>Confidence:</b> {conf_pct}% ({grade})
+⏱ <b>15M Chart | 🎯 Live On-Demand</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 💰 <b>ENTRY :</b> <code>{c:,.{digits}f}</code>
 🛑 <b>SL    :</b> <code>{sl:,.{digits}f}</code> (-{sl_dist:,.{digits}f} pts)
@@ -126,17 +132,22 @@ def run_single_asset_analysis(symbol: str) -> str:
 🎯 <b>TP2   :</b> <code>{tp2:,.{digits}f}</code> (+{2.5*sl_dist:,.{digits}f} pts | Runner)
 📦 <b>SIZE  :</b> <code>{cent_lot}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 <b>Rule:</b> At TP1, close 1 clip & move SL to entry!
-📊 <b>Rationale:</b> {range_pct:.1f}% 24h Discount + RSI {rsi:.1f} Oversold"""
+💡 <b>Rule:</b> At TP1, close 1 clip & move SL to entry!"""
 
         # Sell Setup (Premium)
-        elif range_pct >= 65 and rsi >= 62:
+        elif range_pct >= 65 and rsi >= 62 and c < float(cur["Open"]):
             sl = c + sl_dist
             tp1 = c - (1.0 * sl_dist)
             tp2 = c - (2.5 * sl_dist)
+            c_range = min(30, int((range_pct - 65) * 1.5))
+            c_rsi = min(30, int((rsi - 62) * 1.5))
+            c_session = 25 if 12 <= datetime.now(timezone.utc).hour <= 21 else 15
+            conf_pct = min(98, max(65, 50 + c_range + c_rsi + c_session + 15))
+            grade = "A+ (Elite)" if conf_pct >= 90 else ("A (Strong)" if conf_pct >= 80 else "B+ (Good)")
             return f"""━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>🔴 SELL {name}</b>
-⏱ <b>15-Minute Chart | 🎯 On-Demand Scan</b>
+⭐️ <b>Confidence:</b> {conf_pct}% ({grade})
+⏱ <b>15M Chart | 🎯 Live On-Demand</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 💰 <b>ENTRY :</b> <code>{c:,.{digits}f}</code>
 🛑 <b>SL    :</b> <code>{sl:,.{digits}f}</code> (-{sl_dist:,.{digits}f} pts)
@@ -144,8 +155,7 @@ def run_single_asset_analysis(symbol: str) -> str:
 🎯 <b>TP2   :</b> <code>{tp2:,.{digits}f}</code> (+{2.5*sl_dist:,.{digits}f} pts | Runner)
 📦 <b>SIZE  :</b> <code>{cent_lot}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 <b>Rule:</b> At TP1, close 1 clip & move SL to entry!
-📊 <b>Rationale:</b> {range_pct:.1f}% 24h Premium + RSI {rsi:.1f} Overbought"""
+💡 <b>Rule:</b> At TP1, close 1 clip & move SL to entry!"""
 
         # Mid-Range (No Setup)
         else:
@@ -153,11 +163,12 @@ def run_single_asset_analysis(symbol: str) -> str:
             return f"""━━━━━━━━━━━━━━━━━━━━━━━━━━
 {emoji} <b>{name} STATUS</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-💰 <b>Price:</b> <code>{c:,.{digits}f}</code>
-📊 <b>24h Range:</b> <code>{range_pct:.1f}%</code> ({zone})
-📈 <b>RSI (14):</b> <code>{rsi:.1f}</code>
+💰 <b>Live Price:</b> <code>{c:,.{digits}f}</code>
+📊 <b>24h Range :</b> <code>{range_pct:.1f}%</code> ({zone})
+📈 <b>RSI (14)   :</b> <code>{rsi:.1f}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-⏸ <b>Status:</b> No high-conviction setup right now. Price is in mid-range. Wait for discount (<35%) or premium (>65%) sweep!"""
+⏸ <b>Status:</b> No high-conviction setup right now. 
+💡 <i>Wait for pullback into Discount (&lt;35%) or Premium (&gt;65%) sweep!</i>"""
     except Exception as e:
         return f"❌ Error analyzing {name}: {e}"
 
@@ -215,14 +226,24 @@ def run_full_market_scan() -> str:
             status_lines.append(f"{emoji} <b>{short_name:<8}:</b> <code>{c:,.{digits}f}</code> | {range_pct:4.0f}% {zone_tag} | RSI: {rsi:3.0f}")
 
             # STRICT BUY: Deep Discount + RSI Oversold + MUST BE GREEN CANDLE (Close > Open)
-            if range_pct <= 30 and rsi <= 35 and c > o:
+            if range_pct <= 35 and rsi <= 38 and c > o:
                 sl = c - sl_dist; tp1 = c + sl_dist; tp2 = c + (2.5 * sl_dist)
-                score = (35 - range_pct) + (35 - rsi)
+                
+                # Calculate Confidence Score (0-100%)
+                c_range = min(30, int((35 - range_pct) * 1.5))
+                c_rsi = min(30, int((38 - rsi) * 1.5))
+                c_session = 25 if 12 <= datetime.now(timezone.utc).hour <= 21 else 15
+                c_body = 15 if (c - o) > (0.3 * atr) else 10
+                conf_pct = min(98, max(65, 50 + c_range + c_rsi + c_session + c_body))
+                grade = "A+ (Elite)" if conf_pct >= 90 else ("A (Strong)" if conf_pct >= 80 else "B+ (Good)")
+
+                score = conf_pct
                 candidates.append({
                     "score": score,
                     "text": f"""━━━━━━━━━━━━━━━━━━━━━━━━━━
-<b>🟢 TOP PICK: BUY {name}</b>
-⏱ <b>15-Minute Chart | 🎯 High-Conviction Setup</b>
+<b>🟢 BUY {name}</b>
+⭐️ <b>Confidence:</b> {conf_pct}% ({grade})
+⏱ <b>15M Chart | 🎯 Sniper Setup</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 💰 <b>ENTRY :</b> <code>{c:,.{digits}f}</code>
 🛑 <b>SL    :</b> <code>{sl:,.{digits}f}</code> (-{sl_dist:,.{digits}f} pts)
@@ -230,19 +251,27 @@ def run_full_market_scan() -> str:
 🎯 <b>TP2   :</b> <code>{tp2:,.{digits}f}</code> (+{2.5*sl_dist:,.{digits}f} pts | Runner)
 📦 <b>SIZE  :</b> <code>{cent_lot}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 <b>Rule:</b> At TP1, close 1 clip & move SL to entry!
-📊 <b>Rationale:</b> {range_pct:.1f}% Discount + RSI {rsi:.1f} + Bullish Candle"""
+💡 <b>Rule:</b> At TP1, close 1 clip & move SL to entry!"""
                 })
 
             # STRICT SELL: High Premium + RSI Overbought + MUST BE RED CANDLE (Close < Open)
-            elif range_pct >= 70 and rsi >= 65 and c < o:
+            elif range_pct >= 65 and rsi >= 62 and c < o:
                 sl = c + sl_dist; tp1 = c - sl_dist; tp2 = c - (2.5 * sl_dist)
-                score = (range_pct - 70) + (rsi - 65)
+                
+                c_range = min(30, int((range_pct - 65) * 1.5))
+                c_rsi = min(30, int((rsi - 62) * 1.5))
+                c_session = 25 if 12 <= datetime.now(timezone.utc).hour <= 21 else 15
+                c_body = 15 if (o - c) > (0.3 * atr) else 10
+                conf_pct = min(98, max(65, 50 + c_range + c_rsi + c_session + c_body))
+                grade = "A+ (Elite)" if conf_pct >= 90 else ("A (Strong)" if conf_pct >= 80 else "B+ (Good)")
+
+                score = conf_pct
                 candidates.append({
                     "score": score,
                     "text": f"""━━━━━━━━━━━━━━━━━━━━━━━━━━
-<b>🔴 TOP PICK: SELL {name}</b>
-⏱ <b>15-Minute Chart | 🎯 High-Conviction Setup</b>
+<b>🔴 SELL {name}</b>
+⭐️ <b>Confidence:</b> {conf_pct}% ({grade})
+⏱ <b>15M Chart | 🎯 Sniper Setup</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 💰 <b>ENTRY :</b> <code>{c:,.{digits}f}</code>
 🛑 <b>SL    :</b> <code>{sl:,.{digits}f}</code> (-{sl_dist:,.{digits}f} pts)
@@ -250,8 +279,7 @@ def run_full_market_scan() -> str:
 🎯 <b>TP2   :</b> <code>{tp2:,.{digits}f}</code> (+{2.5*sl_dist:,.{digits}f} pts | Runner)
 📦 <b>SIZE  :</b> <code>{cent_lot}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 <b>Rule:</b> At TP1, close 1 clip & move SL to entry!
-📊 <b>Rationale:</b> {range_pct:.1f}% Premium + RSI {rsi:.1f} + Bearish Candle"""
+💡 <b>Rule:</b> At TP1, close 1 clip & move SL to entry!"""
                 })
 
         except Exception as e:
