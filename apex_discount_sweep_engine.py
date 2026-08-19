@@ -285,24 +285,39 @@ def format_signal_message(sig_data: dict) -> str:
     tp1_pts = abs(tp1 - entry)
     tp2_pts = abs(tp2 - entry)
 
+    if direction == "BUY":
+        broker_guide = f"""📱 <b>EXNESS / MT5 QUICK SETUP (Zero Confusion):</b>
+• <b>Enter Market:</b> Press BUY at your live price (P)
+• <b>Stop Loss:</b> Set P - <code>{sl_pts:,.{digits}f}</code>
+• <b>Take Profit 1:</b> Set P + <code>{tp1_pts:,.{digits}f}</code> (Clip 1)
+• <b>Take Profit 2:</b> Set P + <code>{tp2_pts:,.{digits}f}</code> (Clips 2 & 3)"""
+    else:
+        broker_guide = f"""📱 <b>EXNESS / MT5 QUICK SETUP (Zero Confusion):</b>
+• <b>Enter Market:</b> Press SELL at your live price (P)
+• <b>Stop Loss:</b> Set P + <code>{sl_pts:,.{digits}f}</code>
+• <b>Take Profit 1:</b> Set P - <code>{tp1_pts:,.{digits}f}</code> (Clip 1)
+• <b>Take Profit 2:</b> Set P - <code>{tp2_pts:,.{digits}f}</code> (Clips 2 & 3)"""
+
     msg = f"""🚨 <b>INSTITUTIONAL DISCOUNT SWEEP ALERT</b> 🚨
 {emoji} <b>Asset:</b> {name}
 ⏱ <b>Time:</b> {now_kh} (Cambodia Local Active)
 
 {dir_emoji}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-💰 <b>Entry Price:</b> <code>{entry:,.{digits}f}</code>
-🛑 <b>Stop Loss:</b> <code>{sl:,.{digits}f}</code> (-{sl_pts:.{digits}f} pts)
-🎯 <b>Take Profit 1:</b> <code>{tp1:,.{digits}f}</code> (+{tp1_pts:.{digits}f} pts | 1:1 R:R)
-🎯 <b>Take Profit 2:</b> <code>{tp2:,.{digits}f}</code> (+{tp2_pts:.{digits}f} pts | 2.5:1 R:R)
+💰 <b>Reference Price:</b> <code>{entry:,.{digits}f}</code>
+🛑 <b>Stop Loss Distance:</b> <code>{sl_pts:,.{digits}f}</code> pts
+🎯 <b>TP1 Distance:</b> +<code>{tp1_pts:,.{digits}f}</code> pts (1:1 R:R)
+🎯 <b>TP2 Distance:</b> +<code>{tp2_pts:,.{digits}f}</code> pts (2.5:1 R:R)
 
+{broker_guide}
+━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚖️ <b>Risk:Reward:</b> 1 : 2.5 (Champion Runner)
 📦 <b>Recommended Size:</b> <code>{cent_lot}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 🛡️ <b>CHAMPION 3-CLIP EXECUTION PLAN:</b>
-1️⃣ <b>Clip 1:</b> Closes in CASH at TP1 (<code>{tp1:,.{digits}f}</code>).
+1️⃣ <b>Clip 1:</b> Closes in CASH at TP1 (+<code>{tp1_pts:,.{digits}f}</code> pts).
 2️⃣ <b>Trail SL:</b> Once TP1 hits, move SL on Clips 2 & 3 to <b>GREEN PROFIT</b> (+0.2R)!
-3️⃣ <b>Clips 2 & 3:</b> Let them run to TP2 (<code>{tp2:,.{digits}f}</code>) completely risk-free!
+3️⃣ <b>Clips 2 & 3:</b> Let them run to TP2 (+<code>{tp2_pts:,.{digits}f}</code> pts) completely risk-free!
 
 📊 <b>Institutional Rationale:</b>
 • {reason}
