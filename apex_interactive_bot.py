@@ -378,25 +378,25 @@ def poll_updates():
 
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] Received command: {text}")
 
-                    if text in ["/start", "/help", "help", "start"]:
+                    if "start" in text or "help" in text:
                         send_message(get_help_message(), reply_to_id=msg_id)
-                    elif text in ["/scan", "scan", "🔍 full scan", "full scan"]:
+                    elif "scan" in text:
                         send_message("⏳ <i>Scanning live market feeds...</i>", reply_to_id=msg_id)
                         res = run_full_market_scan()
                         send_message(res)
-                    elif text in ["/gold", "gold", "🥇 gold 15m", "🥇 gold", "gold 15m"]:
+                    elif "gold" in text:
                         send_message("⏳ <i>Analyzing Gold 15M live price action...</i>", reply_to_id=msg_id)
                         res = run_single_asset_analysis("GC=F")
                         send_message(res)
-                    elif text in ["/btc", "btc", "/bitcoin", "₿ bitcoin", "bitcoin"]:
+                    elif "btc" in text or "bitcoin" in text:
                         send_message("⏳ <i>Analyzing Bitcoin 15M live price action...</i>", reply_to_id=msg_id)
                         res = run_single_asset_analysis("BTC-USD")
                         send_message(res)
-                    elif text in ["/eth", "eth", "/ethereum", "ethereum"]:
+                    elif "eth" in text or "ethereum" in text:
                         send_message("⏳ <i>Analyzing Ethereum 15M live price action...</i>", reply_to_id=msg_id)
                         res = run_single_asset_analysis("ETH-USD")
                         send_message(res)
-                    elif text in ["/status", "status", "📊 status"]:
+                    elif "status" in text:
                         send_message(get_status_report(), reply_to_id=msg_id)
 
         except Exception as e:
