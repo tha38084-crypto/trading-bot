@@ -38,7 +38,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
 
 # ── Configuration (With Bulletproof Fallbacks) ─────────────────────────────
 BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8805795541:AAFQxtzJrvJQlfBVazkVm4KwvSh9FSgfDro")
-CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "5477873575")
+CHAT_ID = os.environ.get("TELEGRAM_CHANNEL_ID", os.environ.get("TELEGRAM_CHAT_ID", "-1004414824960"))
 
 # Try loading from .env if not in environment
 if not BOT_TOKEN or not CHAT_ID:
@@ -49,7 +49,7 @@ if not BOT_TOKEN or not CHAT_ID:
                 line = line.strip()
                 if line.startswith("TELEGRAM_BOT_TOKEN=") and not BOT_TOKEN:
                     BOT_TOKEN = line.split("=", 1)[1]
-                elif line.startswith("TELEGRAM_CHAT_ID=") and not CHAT_ID:
+                elif (line.startswith("TELEGRAM_CHANNEL_ID=") or line.startswith("TELEGRAM_CHAT_ID=")) and not CHAT_ID:
                     CHAT_ID = line.split("=", 1)[1]
 
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "apex_fvg_state.json")
