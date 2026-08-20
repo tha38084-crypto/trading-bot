@@ -506,13 +506,38 @@ def start_health_server():
         print(f"Health server note: {e}")
 
 
+def automated_scanner_loop():
+    print("📡 [AUTONOMOUS SCANNER] Background market radar started (Scans every 15 min)...")
+    time.sleep(10)  # Initial wait
+    last_sent_sig = None
+    while True:
+        try:
+            res = run_full_market_scan()
+            if ("BUY " in res or "SELL " in res) and "Status: All assets" not in res:
+                if res != last_sent_sig:
+                    last_sent_sig = res
+                    send_message(f"🚨 <b>[AUTONOMOUS RADAR ALERT]</b>\n\n{res}")
+                    print(f"[{datetime.now().strftime('%H:%M:%S')}] Automated signal dispatched to Telegram!")
+            time.sleep(900)  # 15 minutes
+        except Exception as e:
+            print(f"Background scanner note: {e}")
+            time.sleep(60)
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--test-scan":
         print(run_full_market_scan())
     else:
         import threading
-        t = threading.Thread(target=start_health_server, daemon=True)
-        t.start()
+        # 1. Health check server (for Render 24/7 cloud hosting)
+        t_health = threading.Thread(target=start_health_server, daemon=True)
+        t_health.start()
+
+        # 2. Automated background scanner (15m auto-alerts)
+        t_scan = threading.Thread(target=automated_scanner_loop, daemon=True)
+        t_scan.start()
+
+        # 3. Interactive Telegram bot listener
         poll_updates()
 
 
