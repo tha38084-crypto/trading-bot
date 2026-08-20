@@ -45,7 +45,18 @@ ASSETS = {
 }
 
 
-def send_message(text: str, reply_to_id: int = None) -> bool:
+REPLY_KEYBOARD = {
+    "keyboard": [
+        [{"text": "🔍 Full Scan"}, {"text": "🥇 Gold 15M"}],
+        [{"text": "₿ Bitcoin"}, {"text": "📊 Status"}]
+    ],
+    "resize_keyboard": True,
+    "persistent": True,
+    "one_time_keyboard": False
+}
+
+
+def send_message(text: str, reply_to_id: int = None, show_keyboard: bool = True) -> bool:
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": CHAT_ID,
@@ -55,6 +66,8 @@ def send_message(text: str, reply_to_id: int = None) -> bool:
     }
     if reply_to_id:
         payload["reply_to_message_id"] = reply_to_id
+    if show_keyboard:
+        payload["reply_markup"] = json.dumps(REPLY_KEYBOARD)
     data = urllib.parse.urlencode(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data)
     try:
@@ -64,6 +77,7 @@ def send_message(text: str, reply_to_id: int = None) -> bool:
     except Exception as e:
         print(f"Error sending message: {e}")
         return False
+
 
 
 def run_single_asset_analysis(symbol: str) -> str:
@@ -303,37 +317,35 @@ def run_full_market_scan() -> str:
 def get_status_report() -> str:
     now_utc = datetime.now(timezone.utc)
     hr = now_utc.hour
-    now_str = now_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
+    now_str = now_utc.strftime('%H:%M UTC')
     
     if 7 <= hr <= 12:
-        session = "🇬🇧 London Session Open"
+        session = "🇬🇧 London Session (High Volume)"
     elif 13 <= hr <= 20:
-        session = "🇺🇸 New York Session (High Volatility!)"
+        session = "🇺🇸 New York Session (Peak Volatility)"
     else:
-        session = "🌐 Asian / Pre-Market Session"
+        session = "🌐 Asian / Pre-Market Range"
 
-    return f"""🤖 <b>APEX TRADING ENGINE STATUS</b>
+    return f"""📊 <b>SYSTEM STATUS</b> ({now_str})
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-⏱ <b>Clock:</b> {now_str}
-🏛 <b>Active Session:</b> {session}
-🛡 <b>Engines Running:</b>
-  • Engine 1: Macro 1H FVG Radar 🟢
-  • Engine 2: 15M Institutional Discount Sweep 🟢
-💰 <b>Risk Model:</b> 🏆 Champion 3-Clip Execution
+🏛 <b>Session :</b> {session}
+🛡 <b>Engines :</b> 1H FVG 🟢 | 15M Sweep 🟢
+💰 <b>Sizing  :</b> 3 clips of 0.05 lots
+🎯 <b>Targets :</b> TP1 (1:1 BE) | TP2 (2.5:1 Runner)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-<i>Type /scan to run an instant multi-asset scan! 🚀</i>"""
+<i>Tap '🔍 Full Scan' to check live setups!</i>"""
 
 
 def get_help_message() -> str:
-    return """🎮 <b>APEX AI ASSISTANT COMMANDS</b>
+    return """🎮 <b>APEX TRADING ASSISTANT</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-👉 <b>/scan</b>  ➔ Full market institutional scan
-👉 <b>/gold</b>  ➔ Gold (XAU/USD) live analysis
-👉 <b>/btc</b>   ➔ Bitcoin (BTC/USD) live analysis
-👉 <b>/eth</b>   ➔ Ethereum (ETH/USD) live analysis
-👉 <b>/status</b>➔ System status & session clock
+Tap any button below to scan:
+• 🔍 <b>Full Scan</b> ➔ Multi-Asset Radar & Top Pick
+• 🥇 <b>Gold 15M</b>  ➔ Live XAU/USD Setup
+• ₿ <b>Bitcoin</b>   ➔ Live BTC/USD Setup
+• 📊 <b>Status</b>    ➔ Session Clock & Engine Health
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-<i>Just tap any command above to run it instantly! 🎯</i>"""
+<i>Institutional Math | 3-Clip Model</i> 🎯"""
 
 
 def poll_updates():
@@ -366,30 +378,31 @@ def poll_updates():
 
                     print(f"[{datetime.now().strftime('%H:%M:%S')}] Received command: {text}")
 
-                    if text in ["/start", "/help", "help"]:
+                    if text in ["/start", "/help", "help", "start"]:
                         send_message(get_help_message(), reply_to_id=msg_id)
-                    elif text in ["/scan", "scan"]:
-                        send_message("⏳ <i>Scanning live market feeds (Gold, BTC, ETH, Forex)...</i>", reply_to_id=msg_id)
+                    elif text in ["/scan", "scan", "🔍 full scan", "full scan"]:
+                        send_message("⏳ <i>Scanning live market feeds...</i>", reply_to_id=msg_id)
                         res = run_full_market_scan()
                         send_message(res)
-                    elif text in ["/gold", "gold"]:
-                        send_message("⏳ <i>Analyzing Gold live price action...</i>", reply_to_id=msg_id)
+                    elif text in ["/gold", "gold", "🥇 gold 15m", "🥇 gold", "gold 15m"]:
+                        send_message("⏳ <i>Analyzing Gold 15M live price action...</i>", reply_to_id=msg_id)
                         res = run_single_asset_analysis("GC=F")
                         send_message(res)
-                    elif text in ["/btc", "btc", "/bitcoin"]:
-                        send_message("⏳ <i>Analyzing Bitcoin live price action...</i>", reply_to_id=msg_id)
+                    elif text in ["/btc", "btc", "/bitcoin", "₿ bitcoin", "bitcoin"]:
+                        send_message("⏳ <i>Analyzing Bitcoin 15M live price action...</i>", reply_to_id=msg_id)
                         res = run_single_asset_analysis("BTC-USD")
                         send_message(res)
-                    elif text in ["/eth", "eth", "/ethereum"]:
-                        send_message("⏳ <i>Analyzing Ethereum live price action...</i>", reply_to_id=msg_id)
+                    elif text in ["/eth", "eth", "/ethereum", "ethereum"]:
+                        send_message("⏳ <i>Analyzing Ethereum 15M live price action...</i>", reply_to_id=msg_id)
                         res = run_single_asset_analysis("ETH-USD")
                         send_message(res)
-                    elif text in ["/status", "status"]:
+                    elif text in ["/status", "status", "📊 status"]:
                         send_message(get_status_report(), reply_to_id=msg_id)
 
         except Exception as e:
             print(f"Polling note: {e}")
             time.sleep(3)
+
 
 
 def start_health_server():
