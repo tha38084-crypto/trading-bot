@@ -387,6 +387,11 @@ def poll_updates():
                     elif text in ["/status", "status"]:
                         send_message(get_status_report(), reply_to_id=msg_id)
 
+        except Exception as e:
+            print(f"Polling note: {e}")
+            time.sleep(3)
+
+
 def start_health_server():
     from http.server import HTTPServer, BaseHTTPRequestHandler
     class HealthHandler(BaseHTTPRequestHandler):
@@ -415,4 +420,5 @@ if __name__ == "__main__":
         t = threading.Thread(target=start_health_server, daemon=True)
         t.start()
         poll_updates()
+
 
