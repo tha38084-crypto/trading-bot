@@ -47,7 +47,7 @@ ASSETS = {
 
 INLINE_KEYBOARD = {
     "inline_keyboard": [
-        [{"text": "🔍 Full Scan", "callback_data": "scan"}, {"text": "🥇 Gold 15M", "callback_data": "gold"}],
+        [{"text": "🔄 Refresh Scan", "callback_data": "scan"}, {"text": "🥇 Gold 15M", "callback_data": "gold"}],
         [{"text": "₿ Bitcoin", "callback_data": "btc"}, {"text": "📊 Status", "callback_data": "status"}]
     ]
 }
@@ -280,12 +280,21 @@ def run_full_market_scan() -> str:
             sl_dist = 0.2 * atr
             if sl_dist < 0.15 * atr: sl_dist = 0.15 * atr
 
-            # Status line for the overview table
+            # Status line for the overview table (Compact 1-line layout)
             if range_pct <= 35: zone_tag = "🟢 Disc"
             elif range_pct >= 65: zone_tag = "🔴 Prem"
             else: zone_tag = "⚪ Mid"
-            short_name = name.split()[0]
-            status_lines.append(f"{emoji} <b>{short_name:<8}:</b> <code>{c:,.{digits}f}</code> | {range_pct:4.0f}% {zone_tag} | RSI: {rsi:3.0f}")
+            
+            short_code = {
+                "GC=F": "GOLD",
+                "BTC-USD": "BTC ",
+                "ETH-USD": "ETH ",
+                "NQ=F": "NQ  ",
+                "GBPUSD=X": "GBP ",
+                "EURUSD=X": "EUR "
+            }.get(sym, name[:4])
+            
+            status_lines.append(f"{emoji} <b>{short_code}:</b> <code>{c:,.{digits}f}</code> | {range_pct:3.0f}% {zone_tag} | RSI:{rsi:2.0f}")
 
             # STRICT BUY: Deep Discount + RSI Oversold + MUST BE GREEN CANDLE (Close > Open)
             if range_pct <= 35 and rsi <= 38 and c > o:
