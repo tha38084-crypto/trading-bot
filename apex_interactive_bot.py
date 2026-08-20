@@ -103,13 +103,19 @@ def edit_message_text(chat_id: str, message_id: int, text: str) -> bool:
             res = json.loads(resp.read().decode("utf-8"))
             return res.get("ok", False)
     except Exception as e:
-        print(f"Error editing message: {e}")
+        # Ignore 'message is not modified' error from Telegram
+        if "not modified" not in str(e).lower():
+            print(f"Error editing message: {e}")
         return False
 
 
-def answer_callback_query(callback_id: str) -> bool:
+def answer_callback_query(callback_id: str, text: str = "🔄 Live Market Data Refreshed!") -> bool:
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery"
-    payload = {"callback_query_id": callback_id}
+    payload = {
+        "callback_query_id": callback_id,
+        "text": text,
+        "show_alert": False
+    }
     data = urllib.parse.urlencode(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data)
     try:
@@ -117,6 +123,7 @@ def answer_callback_query(callback_id: str) -> bool:
             return True
     except Exception:
         return False
+
 
 
 
@@ -340,7 +347,7 @@ def run_full_market_scan() -> str:
         except Exception as e:
             print(f"Error {sym}: {e}")
 
-    now_kh = datetime.now(timezone.utc).strftime('%H:%M UTC')
+    now_kh = datetime.now(timezone.utc).strftime('%H:%M:%S UTC')
     overview_block = "📡 <b>MARKET OVERVIEW</b> (" + now_kh + ")\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n" + "\n".join(status_lines)
 
     if candidates:
@@ -358,7 +365,7 @@ def run_full_market_scan() -> str:
 def get_status_report() -> str:
     now_utc = datetime.now(timezone.utc)
     hr = now_utc.hour
-    now_str = now_utc.strftime('%H:%M UTC')
+    now_str = now_utc.strftime('%H:%M:%S UTC')
     
     if 7 <= hr <= 12:
         session = "🇬🇧 London Session (High Volume)"
