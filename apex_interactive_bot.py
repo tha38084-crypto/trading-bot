@@ -45,6 +45,13 @@ ASSETS = {
 }
 
 
+INLINE_KEYBOARD = {
+    "inline_keyboard": [
+        [{"text": "🔍 Full Scan", "callback_data": "scan"}, {"text": "🥇 Gold 15M", "callback_data": "gold"}],
+        [{"text": "₿ Bitcoin", "callback_data": "btc"}, {"text": "📊 Status", "callback_data": "status"}]
+    ]
+}
+
 REPLY_KEYBOARD = {
     "keyboard": [
         [{"text": "🔍 Full Scan"}, {"text": "🥇 Gold 15M"}],
@@ -67,7 +74,7 @@ def send_message(text: str, reply_to_id: int = None, show_keyboard: bool = True)
     if reply_to_id:
         payload["reply_to_message_id"] = reply_to_id
     if show_keyboard:
-        payload["reply_markup"] = json.dumps(REPLY_KEYBOARD)
+        payload["reply_markup"] = json.dumps(INLINE_KEYBOARD)
     data = urllib.parse.urlencode(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data)
     try:
@@ -77,6 +84,40 @@ def send_message(text: str, reply_to_id: int = None, show_keyboard: bool = True)
     except Exception as e:
         print(f"Error sending message: {e}")
         return False
+
+
+def edit_message_text(chat_id: str, message_id: int, text: str) -> bool:
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageText"
+    payload = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+        "reply_markup": json.dumps(INLINE_KEYBOARD)
+    }
+    data = urllib.parse.urlencode(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=data)
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            res = json.loads(resp.read().decode("utf-8"))
+            return res.get("ok", False)
+    except Exception as e:
+        print(f"Error editing message: {e}")
+        return False
+
+
+def answer_callback_query(callback_id: str) -> bool:
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery"
+    payload = {"callback_query_id": callback_id}
+    data = urllib.parse.urlencode(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=data)
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return True
+    except Exception:
+        return False
+
 
 
 
@@ -351,7 +392,7 @@ Tap any button below to scan:
 def poll_updates():
     print("================================================================")
     print(" 🤖 APEX INTERACTIVE TELEGRAM BOT LISTENER ACTIVE")
-    print(" Listening for commands (/scan, /gold, /btc, /eth, /status)...")
+    print(" Listening for commands & inline button taps...")
     print("================================================================\n")
 
     offset = 0
@@ -367,6 +408,34 @@ def poll_updates():
 
                 for update in data.get("result", []):
                     offset = update["update_id"] + 1
+
+                    # 1. Handle Inline Button Tap (Edit in Place!)
+                    if "callback_query" in update:
+                        cq = update["callback_query"]
+                        cq_id = cq.get("id")
+                        action = cq.get("data", "")
+                        msg = cq.get("message", {})
+                        msg_id = msg.get("message_id")
+                        chat_id = msg.get("chat", {}).get("id")
+
+                        answer_callback_query(cq_id)
+                        print(f"[{datetime.now().strftime('%H:%M:%S')}] Inline button tapped: {action}")
+
+                        if action == "scan":
+                            res = run_full_market_scan()
+                            edit_message_text(chat_id, msg_id, res)
+                        elif action == "gold":
+                            res = run_single_asset_analysis("GC=F")
+                            edit_message_text(chat_id, msg_id, res)
+                        elif action == "btc":
+                            res = run_single_asset_analysis("BTC-USD")
+                            edit_message_text(chat_id, msg_id, res)
+                        elif action == "status":
+                            res = get_status_report()
+                            edit_message_text(chat_id, msg_id, res)
+                        continue
+
+                    # 2. Handle Text Message
                     msg = update.get("message", {})
                     text = msg.get("text", "").strip().lower()
                     msg_id = msg.get("message_id")
@@ -381,19 +450,15 @@ def poll_updates():
                     if "start" in text or "help" in text:
                         send_message(get_help_message(), reply_to_id=msg_id)
                     elif "scan" in text:
-                        send_message("⏳ <i>Scanning live market feeds...</i>", reply_to_id=msg_id)
                         res = run_full_market_scan()
                         send_message(res)
                     elif "gold" in text:
-                        send_message("⏳ <i>Analyzing Gold 15M live price action...</i>", reply_to_id=msg_id)
                         res = run_single_asset_analysis("GC=F")
                         send_message(res)
                     elif "btc" in text or "bitcoin" in text:
-                        send_message("⏳ <i>Analyzing Bitcoin 15M live price action...</i>", reply_to_id=msg_id)
                         res = run_single_asset_analysis("BTC-USD")
                         send_message(res)
                     elif "eth" in text or "ethereum" in text:
-                        send_message("⏳ <i>Analyzing Ethereum 15M live price action...</i>", reply_to_id=msg_id)
                         res = run_single_asset_analysis("ETH-USD")
                         send_message(res)
                     elif "status" in text:
