@@ -340,6 +340,16 @@ def main():
             if ok:
                 print(f"✅ Telegram signal dispatched successfully for {sig['name']}!")
                 signals_sent += 1
+                try:
+                    import trade_tracker
+                    trade_tracker.log_new_signal(
+                        symbol, sig["name"], sig["emoji"], sig["signal"],
+                        sig["entry"], sig["sl"], sig["tp1"], sig["tp2"],
+                        sig.get("confidence", 85), sig.get("grade", "A (Strong)"),
+                        sig["digits"]
+                    )
+                except Exception as ex:
+                    print(f"Tracker log note: {ex}")
                 if "last_signals" not in state:
                     state["last_signals"] = {}
                 state["last_signals"][symbol] = sig

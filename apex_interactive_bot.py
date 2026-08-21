@@ -16,6 +16,7 @@ import time
 import urllib.request
 import urllib.parse
 from datetime import datetime, timezone
+import trade_tracker
 
 if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
     try: sys.stdout.reconfigure(encoding='utf-8')
@@ -183,6 +184,7 @@ def run_single_asset_analysis(symbol: str) -> str:
             c_session = 25 if 12 <= datetime.now(timezone.utc).hour <= 21 else 15
             conf_pct = min(98, max(65, 50 + c_range + c_rsi + c_session + 15))
             grade = "A+ (Elite)" if conf_pct >= 90 else ("A (Strong)" if conf_pct >= 80 else "B+ (Good)")
+            trade_tracker.log_new_signal(symbol, name, emoji, "BUY", c, sl, tp1, tp2, conf_pct, grade, digits)
             return f"""━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>🟢 BUY {name}</b>
 ⭐️ <b>Confidence:</b> {conf_pct}% ({grade})
@@ -206,6 +208,7 @@ def run_single_asset_analysis(symbol: str) -> str:
             c_session = 25 if 12 <= datetime.now(timezone.utc).hour <= 21 else 15
             conf_pct = min(98, max(65, 50 + c_range + c_rsi + c_session + 15))
             grade = "A+ (Elite)" if conf_pct >= 90 else ("A (Strong)" if conf_pct >= 80 else "B+ (Good)")
+            trade_tracker.log_new_signal(symbol, name, emoji, "SELL", c, sl, tp1, tp2, conf_pct, grade, digits)
             return f"""━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>🔴 SELL {name}</b>
 ⭐️ <b>Confidence:</b> {conf_pct}% ({grade})
@@ -309,6 +312,7 @@ def run_full_market_scan() -> str:
                 grade = "A+ (Elite)" if conf_pct >= 90 else ("A (Strong)" if conf_pct >= 80 else "B+ (Good)")
 
                 score = conf_pct
+                trade_tracker.log_new_signal(sym, name, emoji, "BUY", c, sl, tp1, tp2, conf_pct, grade, digits)
                 candidates.append({
                     "score": score,
                     "text": f"""━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -337,6 +341,7 @@ def run_full_market_scan() -> str:
                 grade = "A+ (Elite)" if conf_pct >= 90 else ("A (Strong)" if conf_pct >= 80 else "B+ (Good)")
 
                 score = conf_pct
+                trade_tracker.log_new_signal(sym, name, emoji, "SELL", c, sl, tp1, tp2, conf_pct, grade, digits)
                 candidates.append({
                     "score": score,
                     "text": f"""━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -358,6 +363,10 @@ def run_full_market_scan() -> str:
 
     now_kh = datetime.now(timezone.utc).strftime('%H:%M:%S UTC')
     overview_block = "📡 <b>MARKET OVERVIEW</b> (" + now_kh + ")\n━━━━━━━━━━━━━━━━━━━━━━━━━━\n" + "\n".join(status_lines)
+    
+    active_summary = trade_tracker.get_active_trades_summary()
+    if active_summary:
+        overview_block += "\n" + active_summary
 
     if candidates:
         # Pick ONLY the single #1 best setup by score!
@@ -479,6 +488,8 @@ def poll_updates():
                         send_message(res)
                     elif "status" in text:
                         send_message(get_status_report(), reply_to_id=msg_id)
+                    elif "report" in text or "summary" in text or "pnl" in text or "history" in text:
+                        send_message(trade_tracker.generate_daily_summary(), reply_to_id=msg_id)
 
         except Exception as e:
             print(f"Polling note: {e}")
@@ -524,6 +535,34 @@ def automated_scanner_loop():
             time.sleep(60)
 
 
+def watchdog_tracker_loop():
+    print("🎯 [WATCHDOG TRACKER] Background trade ledger & TP/SL watchdog active (Checks every 60s)...")
+    time.sleep(15)
+    while True:
+        try:
+            # 1. Check open trades for TP/SL hits
+            alerts = trade_tracker.check_open_trades()
+            for alert in alerts:
+                send_message(alert)
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] Trade Tracker Alert Sent to Telegram!")
+
+            # 2. Check 10:00 PM ICT (15:00 UTC) for daily performance summary
+            now_kh = trade_tracker.get_kh_time()
+            today_str = now_kh.strftime("%Y-%m-%d")
+            ledger = trade_tracker.load_ledger()
+            if now_kh.hour == 22 and ledger.get("last_daily_report") != today_str:
+                summary = trade_tracker.generate_daily_summary()
+                send_message(summary)
+                ledger["last_daily_report"] = today_str
+                trade_tracker.save_ledger(ledger)
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] Daily 10:00 PM Performance Summary Sent!")
+
+            time.sleep(60)
+        except Exception as e:
+            print(f"Watchdog note: {e}")
+            time.sleep(60)
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--test-scan":
         print(run_full_market_scan())
@@ -537,7 +576,11 @@ if __name__ == "__main__":
         t_scan = threading.Thread(target=automated_scanner_loop, daemon=True)
         t_scan.start()
 
-        # 3. Interactive Telegram bot listener
+        # 3. Trade Tracker & 10:00 PM Daily Performance Watchdog
+        t_watchdog = threading.Thread(target=watchdog_tracker_loop, daemon=True)
+        t_watchdog.start()
+
+        # 4. Interactive Telegram bot listener
         poll_updates()
 
 
