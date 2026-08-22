@@ -330,3 +330,68 @@ def generate_daily_summary() -> str:
 {trade_list_text}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 <i>Institutional Accountability | 3-Clip Model</i> 🎯"""
+
+
+def get_todays_signals_view() -> str:
+    ledger = load_ledger()
+    now_kh = get_kh_time()
+    today_date = now_kh.strftime("%Y-%m-%d")
+    now_str = now_kh.strftime("%H:%M:%S ICT")
+
+    # Get trades from today or last 10
+    today_trades = [t for t in ledger.get("trades", []) if t.get("date") == today_date]
+    if not today_trades:
+        today_trades = ledger.get("trades", [])[-10:] if ledger.get("trades") else []
+
+    if not today_trades:
+        return f"""📜 <b>TODAY'S SIGNALS LEDGER</b> ({now_str})
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+⏸ <b>No signals logged yet today.</b>
+💡 <i>Tap '🔄 Refresh Scan' to analyze live markets!</i>"""
+
+    rows = []
+    total_r = 0.0
+    wins = 0
+    losses = 0
+
+    for i, t in enumerate(today_trades, 1):
+        emoji = t.get("emoji", "🎯")
+        name = t.get("name", "Asset")
+        short_name = name.split()[0]
+        direction = t.get("direction", "BUY")
+        entry = t.get("entry", 0.0)
+        digits = t.get("digits", 2)
+        status = t.get("status", "OPEN")
+        tp1 = t.get("tp1", 0.0)
+        sl = t.get("sl", 0.0)
+        time_str = t.get("time_opened", "")[-8:-3] if t.get("time_opened") else ""
+
+        if "WIN_TP2" in status:
+            tag = f"✅ <b>TP2 HIT (+2.5R)</b>"
+            total_r += 2.5
+            wins += 1
+        elif "BE_CLOSED" in status or status == "WIN_TP1":
+            tag = f"✅ <b>TP1 BANKED (+1.0R)</b>"
+            total_r += 1.0
+            wins += 1
+        elif "LOSS" in status:
+            tag = f"❌ <b>SL HIT (-1.0R)</b>"
+            total_r -= 1.0
+            losses += 1
+        else:
+            be_tag = " [🛡 BE]" if t.get("tp1_hit") else ""
+            tag = f"⏳ <b>STILL OPEN</b> (TP1: <code>{tp1:,.{digits}f}</code> | SL: <code>{sl:,.{digits}f}</code>{be_tag})"
+
+        time_tag = f" ({time_str})" if time_str else ""
+        rows.append(f"{i}. {emoji} <b>{short_name} {direction}</b> @ <code>{entry:,.{digits}f}</code>{time_tag}\n   ➔ {tag}")
+
+    trades_text = "\n\n".join(rows)
+    pnl_sign = "+" if total_r > 0 else ""
+
+    return f"""📜 <b>TODAY'S SIGNALS LEDGER</b> ({now_str})
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+{trades_text}
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+💰 <b>Running Score:</b> {wins}W - {losses}L (<b>{pnl_sign}{total_r:.1f}R Profit</b>)
+<i>Tap '🔄 Refresh Scan' to return to Market Radar</i> 🎯"""
+

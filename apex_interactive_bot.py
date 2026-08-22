@@ -49,14 +49,14 @@ ASSETS = {
 INLINE_KEYBOARD = {
     "inline_keyboard": [
         [{"text": "🔄 Refresh Scan", "callback_data": "scan"}, {"text": "🥇 Gold 15M", "callback_data": "gold"}],
-        [{"text": "₿ Bitcoin", "callback_data": "btc"}, {"text": "📊 Status", "callback_data": "status"}]
+        [{"text": "₿ Bitcoin", "callback_data": "btc"}, {"text": "📜 Today's Signals", "callback_data": "history"}]
     ]
 }
 
 REPLY_KEYBOARD = {
     "keyboard": [
-        [{"text": "🔍 Full Scan"}, {"text": "🥇 Gold 15M"}],
-        [{"text": "₿ Bitcoin"}, {"text": "📊 Status"}]
+        [{"text": "🔄 Refresh Scan"}, {"text": "🥇 Gold 15M"}],
+        [{"text": "₿ Bitcoin"}, {"text": "📜 Today's Signals"}]
     ],
     "resize_keyboard": True,
     "persistent": True,
@@ -406,10 +406,10 @@ def get_help_message() -> str:
     return """🎮 <b>APEX TRADING ASSISTANT</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 Tap any button below to scan:
-• 🔍 <b>Full Scan</b> ➔ Multi-Asset Radar & Top Pick
-• 🥇 <b>Gold 15M</b>  ➔ Live XAU/USD Setup
-• ₿ <b>Bitcoin</b>   ➔ Live BTC/USD Setup
-• 📊 <b>Status</b>    ➔ Session Clock & Engine Health
+• 🔄 <b>Refresh Scan</b>    ➔ Multi-Asset Radar & Live Setups
+• 🥇 <b>Gold 15M</b>        ➔ Live XAU/USD Setup
+• ₿ <b>Bitcoin</b>         ➔ Live BTC/USD Setup
+• 📜 <b>Today's Signals</b> ➔ Today's Live Signals & Win/Loss P&L
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 <i>Institutional Math | 3-Clip Model</i> 🎯"""
 
@@ -455,6 +455,9 @@ def poll_updates():
                         elif action == "btc":
                             res = run_single_asset_analysis("BTC-USD")
                             edit_message_text(chat_id, msg_id, res)
+                        elif action == "history" or action == "signals":
+                            res = trade_tracker.get_todays_signals_view()
+                            edit_message_text(chat_id, msg_id, res)
                         elif action == "status":
                             res = get_status_report()
                             edit_message_text(chat_id, msg_id, res)
@@ -488,6 +491,8 @@ def poll_updates():
                         send_message(res)
                     elif "status" in text:
                         send_message(get_status_report(), reply_to_id=msg_id)
+                    elif "signal" in text or "today" in text:
+                        send_message(trade_tracker.get_todays_signals_view(), reply_to_id=msg_id)
                     elif "report" in text or "summary" in text or "pnl" in text or "history" in text:
                         send_message(trade_tracker.generate_daily_summary(), reply_to_id=msg_id)
 
