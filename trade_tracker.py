@@ -41,15 +41,40 @@ def log_new_signal(symbol: str, name: str, emoji: str, direction: str,
     now_str = now_kh.strftime("%Y-%m-%d %H:%M:%S")
     date_tag = now_kh.strftime("%m%d")
 
-    # Prevent duplicate logging if an active trade for this symbol exists within the last 3 hours
+    # ── GUARDRAIL 1: Hard 3-Hour Cooldown Per Asset ────────────────────────
+    # Block ANY trade on this asset within 3 hours, regardless of outcome
+    # (Win, Loss, or Still Open). This prevents re-entry traps during
+    # pumps/dumps where the bot would keep shorting/buying every 15 minutes.
     for t in ledger.get("trades", []):
-        if t["symbol"] == symbol and t["status"] == "OPEN":
+        if t["symbol"] == symbol:
             try:
                 t_time = datetime.strptime(t["time_opened"], "%Y-%m-%d %H:%M:%S")
                 if (now_kh.replace(tzinfo=None) - t_time).total_seconds() < 10800:
-                    return t  # Already tracking this setup
+                    return t  # Cooldown active — skip this asset entirely
             except Exception:
                 pass
+
+    # ── GUARDRAIL 2: Max 2 Active Trades Cap ───────────────────────────────
+    # Never have more than 2 simultaneous open signals (margin protection).
+    active_count = sum(1 for t in ledger.get("trades", []) if t["status"] == "OPEN")
+    if active_count >= 2:
+        return None  # At capacity — wait for existing trades to resolve
+
+    # ── GUARDRAIL 3: 2-Loss Circuit Breaker Per Asset ──────────────────────
+    # If this asset has 2 consecutive losses in the last 4 hours, freeze it.
+    recent_asset_trades = []
+    for t in ledger.get("trades", []):
+        if t["symbol"] == symbol and t["status"] != "OPEN":
+            try:
+                t_time = datetime.strptime(t["time_opened"], "%Y-%m-%d %H:%M:%S")
+                if (now_kh.replace(tzinfo=None) - t_time).total_seconds() < 14400:  # 4 hours
+                    recent_asset_trades.append(t)
+            except Exception:
+                pass
+    if len(recent_asset_trades) >= 2:
+        last_two = sorted(recent_asset_trades, key=lambda x: x["time_opened"])[-2:]
+        if all(t.get("pnl_r", 0) < 0 for t in last_two):
+            return None  # Circuit breaker triggered — asset frozen
 
     count_today = sum(1 for t in ledger.get("trades", []) if t.get("date") == now_kh.strftime("%Y-%m-%d")) + 1
     short_sym = symbol.replace("=F", "").replace("-USD", "").replace("=X", "")

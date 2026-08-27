@@ -362,9 +362,9 @@ def main():
                     import trade_tracker
                     trade_tracker.log_new_signal(
                         symbol, sig["name"], sig["emoji"], sig["signal"],
-                        sig["entry"], sig["sl"], sig["tp1"], sig["tp2"],
+                        sig["entry"], sig["sl"], sig["tp1"], sig["tp2"], sig["tp3"],
                         sig.get("confidence", 85), sig.get("grade", "A (Strong)"),
-                        sig["digits"]
+                        sig["digits"], sig.get("is_elite", False)
                     )
                 except Exception as ex:
                     print(f"Tracker log note: {ex}")
