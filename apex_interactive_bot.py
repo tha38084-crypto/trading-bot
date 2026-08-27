@@ -179,48 +179,60 @@ def run_single_asset_analysis(symbol: str) -> str:
             sl = c - sl_dist
             tp1 = c + (1.0 * sl_dist)
             tp2 = c + (2.5 * sl_dist)
+            tp3 = c + (4.0 * sl_dist)
+            is_elite = (range_pct <= 25 and rsi <= 32)
             c_range = min(30, int((35 - range_pct) * 1.5))
             c_rsi = min(30, int((38 - rsi) * 1.5))
             c_session = 25 if 12 <= datetime.now(timezone.utc).hour <= 21 else 15
             conf_pct = min(98, max(65, 50 + c_range + c_rsi + c_session + 15))
             grade = "A+ (Elite)" if conf_pct >= 90 else ("A (Strong)" if conf_pct >= 80 else "B+ (Good)")
-            trade_tracker.log_new_signal(symbol, name, emoji, "BUY", c, sl, tp1, tp2, conf_pct, grade, digits)
+            sizing_text = "3 clips of 0.07 lots (A+ Elite 1.5x)" if is_elite else cent_lot
+            tier_badge = "⚡ A+ ELITE (1.5x)" if is_elite else "📊 Grade B"
+            trade_tracker.log_new_signal(symbol, name, emoji, "BUY", c, sl, tp1, tp2, tp3, conf_pct, grade, digits, is_elite)
             return f"""━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>🟢 BUY {name}</b>
 ⭐️ <b>Confidence:</b> {conf_pct}% ({grade})
-⏱ <b>15M Chart | 🎯 Live On-Demand</b>
+⏱ <b>15M Chart | 🎯 {tier_badge}</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 💰 <b>ENTRY :</b> <code>{c:,.{digits}f}</code>
 🛑 <b>SL    :</b> <code>{sl:,.{digits}f}</code> (-{sl_dist:,.{digits}f} pts)
-🎯 <b>TP1   :</b> <code>{tp1:,.{digits}f}</code> (+{sl_dist:,.{digits}f} pts | Close 1 Clip)
-🎯 <b>TP2   :</b> <code>{tp2:,.{digits}f}</code> (+{2.5*sl_dist:,.{digits}f} pts | Runner)
-📦 <b>SIZE  :</b> <code>{cent_lot}</code>
+🎯 <b>TP1   :</b> <code>{tp1:,.{digits}f}</code> (+{sl_dist:,.{digits}f} pts | Bank 1 Clip + SL→BE)
+🎯 <b>TP2   :</b> <code>{tp2:,.{digits}f}</code> (+{2.5*sl_dist:,.{digits}f} pts | Standard Target)
+🚀 <b>TP3   :</b> <code>{tp3:,.{digits}f}</code> (+{4.0*sl_dist:,.{digits}f} pts | Mega-Runner!)
+📦 <b>SIZE  :</b> <code>{sizing_text}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 <b>Rule:</b> At TP1, close 1 clip & move SL to entry!"""
+💡 <b>Rule:</b> At TP1→ Close 1 clip & SL to entry!
+💡 <b>TP2→</b> Close 1 clip, let runner ride to TP3!"""
 
         # Sell Setup (Premium)
         elif range_pct >= 65 and rsi >= 62 and c < float(cur["Open"]):
             sl = c + sl_dist
             tp1 = c - (1.0 * sl_dist)
             tp2 = c - (2.5 * sl_dist)
+            tp3 = c - (4.0 * sl_dist)
+            is_elite = (range_pct >= 75 and rsi >= 68)
             c_range = min(30, int((range_pct - 65) * 1.5))
             c_rsi = min(30, int((rsi - 62) * 1.5))
             c_session = 25 if 12 <= datetime.now(timezone.utc).hour <= 21 else 15
             conf_pct = min(98, max(65, 50 + c_range + c_rsi + c_session + 15))
             grade = "A+ (Elite)" if conf_pct >= 90 else ("A (Strong)" if conf_pct >= 80 else "B+ (Good)")
-            trade_tracker.log_new_signal(symbol, name, emoji, "SELL", c, sl, tp1, tp2, conf_pct, grade, digits)
+            sizing_text = "3 clips of 0.07 lots (A+ Elite 1.5x)" if is_elite else cent_lot
+            tier_badge = "⚡ A+ ELITE (1.5x)" if is_elite else "📊 Grade B"
+            trade_tracker.log_new_signal(symbol, name, emoji, "SELL", c, sl, tp1, tp2, tp3, conf_pct, grade, digits, is_elite)
             return f"""━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>🔴 SELL {name}</b>
 ⭐️ <b>Confidence:</b> {conf_pct}% ({grade})
-⏱ <b>15M Chart | 🎯 Live On-Demand</b>
+⏱ <b>15M Chart | 🎯 {tier_badge}</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 💰 <b>ENTRY :</b> <code>{c:,.{digits}f}</code>
 🛑 <b>SL    :</b> <code>{sl:,.{digits}f}</code> (-{sl_dist:,.{digits}f} pts)
-🎯 <b>TP1   :</b> <code>{tp1:,.{digits}f}</code> (+{sl_dist:,.{digits}f} pts | Close 1 Clip)
-🎯 <b>TP2   :</b> <code>{tp2:,.{digits}f}</code> (+{2.5*sl_dist:,.{digits}f} pts | Runner)
-📦 <b>SIZE  :</b> <code>{cent_lot}</code>
+🎯 <b>TP1   :</b> <code>{tp1:,.{digits}f}</code> (+{sl_dist:,.{digits}f} pts | Bank 1 Clip + SL→BE)
+🎯 <b>TP2   :</b> <code>{tp2:,.{digits}f}</code> (+{2.5*sl_dist:,.{digits}f} pts | Standard Target)
+🚀 <b>TP3   :</b> <code>{tp3:,.{digits}f}</code> (+{4.0*sl_dist:,.{digits}f} pts | Mega-Runner!)
+📦 <b>SIZE  :</b> <code>{sizing_text}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 <b>Rule:</b> At TP1, close 1 clip & move SL to entry!"""
+💡 <b>Rule:</b> At TP1→ Close 1 clip & SL to entry!
+💡 <b>TP2→</b> Close 1 clip, let runner ride to TP3!"""
 
         # Mid-Range (No Setup)
         else:
@@ -301,7 +313,11 @@ def run_full_market_scan() -> str:
 
             # STRICT BUY: Deep Discount + RSI Oversold + MUST BE GREEN CANDLE (Close > Open)
             if range_pct <= 35 and rsi <= 38 and c > o:
-                sl = c - sl_dist; tp1 = c + sl_dist; tp2 = c + (2.5 * sl_dist)
+                sl = c - sl_dist
+                tp1 = c + sl_dist
+                tp2 = c + (2.5 * sl_dist)
+                tp3 = c + (4.0 * sl_dist)
+                is_elite = (range_pct <= 25 and rsi <= 32)
                 
                 # Calculate Confidence Score (0-100%)
                 c_range = min(30, int((35 - range_pct) * 1.5))
@@ -310,28 +326,36 @@ def run_full_market_scan() -> str:
                 c_body = 15 if (c - o) > (0.3 * atr) else 10
                 conf_pct = min(98, max(65, 50 + c_range + c_rsi + c_session + c_body))
                 grade = "A+ (Elite)" if conf_pct >= 90 else ("A (Strong)" if conf_pct >= 80 else "B+ (Good)")
+                sizing_text = "3 clips of 0.07 lots (A+ Elite 1.5x)" if is_elite else cent_lot
+                tier_badge = "⚡ A+ ELITE (1.5x)" if is_elite else "📊 Grade B"
 
                 score = conf_pct
-                trade_tracker.log_new_signal(sym, name, emoji, "BUY", c, sl, tp1, tp2, conf_pct, grade, digits)
+                trade_tracker.log_new_signal(sym, name, emoji, "BUY", c, sl, tp1, tp2, tp3, conf_pct, grade, digits, is_elite)
                 candidates.append({
                     "score": score,
                     "text": f"""━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>🟢 BUY {name}</b>
 ⭐️ <b>Confidence:</b> {conf_pct}% ({grade})
-⏱ <b>15M Chart | 🎯 Sniper Setup</b>
+⏱ <b>15M Chart | 🎯 {tier_badge}</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 💰 <b>ENTRY :</b> <code>{c:,.{digits}f}</code>
 🛑 <b>SL    :</b> <code>{sl:,.{digits}f}</code> (-{sl_dist:,.{digits}f} pts)
-🎯 <b>TP1   :</b> <code>{tp1:,.{digits}f}</code> (+{sl_dist:,.{digits}f} pts | Close 1 Clip)
-🎯 <b>TP2   :</b> <code>{tp2:,.{digits}f}</code> (+{2.5*sl_dist:,.{digits}f} pts | Runner)
-📦 <b>SIZE  :</b> <code>{cent_lot}</code>
+🎯 <b>TP1   :</b> <code>{tp1:,.{digits}f}</code> (+{sl_dist:,.{digits}f} pts | Bank 1 Clip + SL→BE)
+🎯 <b>TP2   :</b> <code>{tp2:,.{digits}f}</code> (+{2.5*sl_dist:,.{digits}f} pts | Standard Target)
+🚀 <b>TP3   :</b> <code>{tp3:,.{digits}f}</code> (+{4.0*sl_dist:,.{digits}f} pts | Mega-Runner!)
+📦 <b>SIZE  :</b> <code>{sizing_text}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 <b>Rule:</b> At TP1, close 1 clip & move SL to entry!"""
+💡 <b>Rule:</b> At TP1→ Close 1 clip & SL to entry!
+💡 <b>TP2→</b> Close 1 clip, let runner ride to TP3!"""
                 })
 
             # STRICT SELL: High Premium + RSI Overbought + MUST BE RED CANDLE (Close < Open)
             elif range_pct >= 65 and rsi >= 62 and c < o:
-                sl = c + sl_dist; tp1 = c - sl_dist; tp2 = c - (2.5 * sl_dist)
+                sl = c + sl_dist
+                tp1 = c - sl_dist
+                tp2 = c - (2.5 * sl_dist)
+                tp3 = c - (4.0 * sl_dist)
+                is_elite = (range_pct >= 75 and rsi >= 68)
                 
                 c_range = min(30, int((range_pct - 65) * 1.5))
                 c_rsi = min(30, int((rsi - 62) * 1.5))
@@ -339,23 +363,27 @@ def run_full_market_scan() -> str:
                 c_body = 15 if (o - c) > (0.3 * atr) else 10
                 conf_pct = min(98, max(65, 50 + c_range + c_rsi + c_session + c_body))
                 grade = "A+ (Elite)" if conf_pct >= 90 else ("A (Strong)" if conf_pct >= 80 else "B+ (Good)")
+                sizing_text = "3 clips of 0.07 lots (A+ Elite 1.5x)" if is_elite else cent_lot
+                tier_badge = "⚡ A+ ELITE (1.5x)" if is_elite else "📊 Grade B"
 
                 score = conf_pct
-                trade_tracker.log_new_signal(sym, name, emoji, "SELL", c, sl, tp1, tp2, conf_pct, grade, digits)
+                trade_tracker.log_new_signal(sym, name, emoji, "SELL", c, sl, tp1, tp2, tp3, conf_pct, grade, digits, is_elite)
                 candidates.append({
                     "score": score,
                     "text": f"""━━━━━━━━━━━━━━━━━━━━━━━━━━
 <b>🔴 SELL {name}</b>
 ⭐️ <b>Confidence:</b> {conf_pct}% ({grade})
-⏱ <b>15M Chart | 🎯 Sniper Setup</b>
+⏱ <b>15M Chart | 🎯 {tier_badge}</b>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 💰 <b>ENTRY :</b> <code>{c:,.{digits}f}</code>
 🛑 <b>SL    :</b> <code>{sl:,.{digits}f}</code> (-{sl_dist:,.{digits}f} pts)
-🎯 <b>TP1   :</b> <code>{tp1:,.{digits}f}</code> (+{sl_dist:,.{digits}f} pts | Close 1 Clip)
-🎯 <b>TP2   :</b> <code>{tp2:,.{digits}f}</code> (+{2.5*sl_dist:,.{digits}f} pts | Runner)
-📦 <b>SIZE  :</b> <code>{cent_lot}</code>
+🎯 <b>TP1   :</b> <code>{tp1:,.{digits}f}</code> (+{sl_dist:,.{digits}f} pts | Bank 1 Clip + SL→BE)
+🎯 <b>TP2   :</b> <code>{tp2:,.{digits}f}</code> (+{2.5*sl_dist:,.{digits}f} pts | Standard Target)
+🚀 <b>TP3   :</b> <code>{tp3:,.{digits}f}</code> (+{4.0*sl_dist:,.{digits}f} pts | Mega-Runner!)
+📦 <b>SIZE  :</b> <code>{sizing_text}</code>
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 <b>Rule:</b> At TP1, close 1 clip & move SL to entry!"""
+💡 <b>Rule:</b> At TP1→ Close 1 clip & SL to entry!
+💡 <b>TP2→</b> Close 1 clip, let runner ride to TP3!"""
                 })
 
         except Exception as e:
@@ -396,10 +424,10 @@ def get_status_report() -> str:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 🏛 <b>Session :</b> {session}
 🛡 <b>Engines :</b> 1H FVG 🟢 | 15M Sweep 🟢
-💰 <b>Sizing  :</b> 3 clips of 0.05 lots
-🎯 <b>Targets :</b> TP1 (1:1 BE) | TP2 (2.5:1 Runner)
+💰 <b>Sizing  :</b> 3 clips of 0.05 lots (0.07 on A+)
+🎯 <b>Targets :</b> TP1 (1.0R) | TP2 (2.5R) | TP3 (4.0R Runner)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-<i>Tap '🔍 Full Scan' to check live setups!</i>"""
+<i>Tap '🔄 Refresh Scan' to check live setups!</i>"""
 
 
 def get_help_message() -> str:
