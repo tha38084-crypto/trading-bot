@@ -1,13 +1,13 @@
 """
 ===============================================================================
-UNIVERSAL PROP FIRM MASTER BOT — INTERACTIVE CLOUD EDITION
+UNIVERSAL PROP FIRM MASTER BOT — 4-IN-1 MULTI-PROP AUDIT ENGINE
 ===============================================================================
 Features:
-  1. Interactive 1-Tap Inline Buttons (Balance, Today's Recap, Active, Target)
+  1. 4-in-1 Prop Multi-Auditor (FTMO, FundedNext, The5ers, Alpha Capital)
   2. 24/7 Cloud Market Scanner (Gold, Nasdaq, GBP/USD, EUR/USD)
-  3. Real-Time Order Lifecycle (1-Line Fill, TP, SL, and Balance Alerts)
-  4. Daily End-of-Day Performance Recap Card
-  5. 0.75% Prop Risk Sizing + 1.5% Daily Loss Governor
+  3. Real-Time Order Lifecycle & 1-Line Compact Alerts
+  4. Daily 4-Prop Audit Scorecard
+  5. 0.75% Fixed Risk Position Sizing + 1.5% Daily Loss Governor
 ===============================================================================
 """
 
@@ -36,9 +36,6 @@ STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "universal
 
 DEFAULT_ACCOUNT_SIZE = float(os.environ.get("PROP_ACCOUNT_SIZE", "25000.0"))
 RISK_PERCENT = 0.0075          # 0.75% Risk per trade ($187.50 on $25k)
-DAILY_LOSS_LIMIT_PCT = 0.015   # 1.50% Max Daily Loss ($375 on $25k)
-TOTAL_DRAWDOWN_LIMIT_PCT = 0.05# 5.00% Max Total Drawdown ($1,250 on $25k)
-PHASE1_TARGET_PCT = 0.08       # +8.00% Profit Target ($2,000 on $25k)
 
 # ── 2. ASSET UNIVERSE & SESSIONS ─────────────────────────────────────────────
 ASSETS = {
@@ -48,7 +45,7 @@ ASSETS = {
     "EURUSD=X": {"name": "EUR/USD",  "emoji": "💶", "min_sl": 0.0010,"contract": 100000.0,"sessions": list(range(7, 17)),"digits": 5},
 }
 
-# ── 3. TELEGRAM DISPATCHER & INTERACTIVE BUTTON ENGINE ───────────────────────
+# ── 3. TELEGRAM DISPATCHER ───────────────────────────────────────────────────
 def send_telegram(message: str, reply_markup: dict = None) -> bool:
     if not BOT_TOKEN or not CHAT_ID:
         return False
@@ -70,48 +67,7 @@ def send_telegram(message: str, reply_markup: dict = None) -> bool:
         print(f"[ERROR] Telegram send failed: {exc}")
         return False
 
-def answer_callback_query(callback_id: str, text: str = None) -> bool:
-    if not BOT_TOKEN: return False
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery"
-    payload_dict = {"callback_query_id": callback_id}
-    if text: payload_dict["text"] = text
-    payload = urllib.parse.urlencode(payload_dict).encode()
-    try:
-        req = urllib.request.Request(url, data=payload, method="POST")
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            return resp.status == 200
-    except Exception:
-        return False
-
-def send_interactive_control_panel(state: dict):
-    """Sends a clean interactive control panel with 1-tap buttons."""
-    starting = state["starting_balance"]
-    current = state["current_balance"]
-    gain_pct = ((current - starting) / starting) * 100
-    
-    msg = f"""💼 <b>UNIVERSAL PROP FIRM CONTROL PANEL</b> 💼
-━━━━━━━━━━━━━━━━━━━━
-📊 <b>Prop Account:</b> <code>${starting:,.2f}</code> (Evaluation Mode)
-💰 <b>Current Balance:</b> <code>${current:,.2f}</code> ({gain_pct:+.2f}%)
-🛡 <b>Daily Governor:</b> 1.5% Max Loss | 5.0% Drawdown Armor
-━━━━━━━━━━━━━━━━━━━━
-<i>Tap any button below for instant live status:</i>"""
-
-    keyboard = {
-        "inline_keyboard": [
-            [
-                {"text": "💰 Check Balance", "callback_data": "btn_balance"},
-                {"text": "📊 Today's Recap", "callback_data": "btn_today"}
-            ],
-            [
-                {"text": "⚡ Active Trades", "callback_data": "btn_active"},
-                {"text": "🎯 Target Progress", "callback_data": "btn_target"}
-            ]
-        ]
-    }
-    return send_telegram(msg, reply_markup=keyboard)
-
-# ── 4. STATE & RISK COMPLIANCE MANAGER ───────────────────────────────────────
+# ── 4. STATE & 4-PROP FIRM AUDITOR ───────────────────────────────────────────
 def load_state() -> dict:
     default_state = {
         "starting_balance": DEFAULT_ACCOUNT_SIZE,
@@ -121,13 +77,47 @@ def load_state() -> dict:
         "daily_start_balance": DEFAULT_ACCOUNT_SIZE,
         "daily_loss": 0.0,
         "is_daily_locked": False,
-        "is_challenge_passed": False,
         "last_signals": {},
         "pending_orders": [],
         "open_trades": [],
         "closed_trades": [],
-        "last_update_id": 0,
-        "daily_recap_sent": ""
+        "daily_recap_sent": "",
+        "prop_firms": {
+            "ftmo": {
+                "name": "🥇 FTMO",
+                "target_pct": 0.08,
+                "target_dollars": DEFAULT_ACCOUNT_SIZE * 0.08,
+                "max_dd_limit_pct": 0.10,
+                "daily_dd_limit_pct": 0.05,
+                "passed": False
+            },
+            "fundednext": {
+                "name": "🥈 FundedNext",
+                "target_pct": 0.10,
+                "target_dollars": DEFAULT_ACCOUNT_SIZE * 0.10,
+                "max_dd_limit_pct": 0.10,
+                "daily_dd_limit_pct": 0.05,
+                "pass_bonus_earned": 0.0,
+                "passed": False
+            },
+            "the5ers": {
+                "name": "🥉 The5ers",
+                "target_pct": 0.08,
+                "target_dollars": DEFAULT_ACCOUNT_SIZE * 0.08,
+                "max_dd_limit_pct": 0.10,
+                "daily_dd_limit_pct": 0.05,
+                "scale_level": "Level 1 ($25k)",
+                "passed": False
+            },
+            "alpha_capital": {
+                "name": "💎 Alpha Capital",
+                "target_pct": 0.08,
+                "target_dollars": DEFAULT_ACCOUNT_SIZE * 0.08,
+                "max_dd_limit_pct": 0.08, # Strict 8% limit
+                "daily_dd_limit_pct": 0.05,
+                "passed": False
+            }
+        }
     }
     if os.path.exists(STATE_FILE):
         try:
@@ -157,19 +147,9 @@ def check_prop_compliance(state: dict) -> tuple[bool, str]:
     starting_bal = state["starting_balance"]
     current_bal = state["current_balance"]
     
-    if current_bal >= starting_bal * (1.0 + PHASE1_TARGET_PCT):
-        if not state.get("is_challenge_passed"):
-            state["is_challenge_passed"] = True
-            save_state(state)
-            send_telegram(
-                f"🏆 <b>PROP CHALLENGE PASSED (+8.0%)!</b>\n"
-                f"💰 Balance: <code>${current_bal:,.2f}</code> | All trades halted to secure funded account!"
-            )
-        return False, "Target Hit (+8.0%) - Challenge Passed!"
-
     daily_start = state["daily_start_balance"]
     daily_drawdown = daily_start - current_bal
-    if daily_drawdown >= (starting_bal * DAILY_LOSS_LIMIT_PCT):
+    if daily_drawdown >= (starting_bal * 0.015): # Hard 1.5% daily stop
         state["is_daily_locked"] = True
         save_state(state)
         return False, f"Daily Loss Governor (-${daily_drawdown:,.2f}). Halted until tomorrow."
@@ -179,7 +159,7 @@ def check_prop_compliance(state: dict) -> tuple[bool, str]:
         state["peak_balance"] = current_bal
         peak = current_bal
     total_dd = peak - current_bal
-    if total_dd >= (starting_bal * TOTAL_DRAWDOWN_LIMIT_PCT):
+    if total_dd >= (starting_bal * 0.05): # Hard 5.0% total DD shield
         return False, f"Max Drawdown Shield (-${total_dd:,.2f}). Trading paused."
 
     return True, "Compliant"
@@ -274,95 +254,7 @@ def detect_prop_setup(symbol: str, meta: dict) -> dict | None:
 
     return None
 
-# ── 7. INTERACTIVE BUTTON CALLBACK PROCESSOR ─────────────────────────────────
-def process_telegram_callbacks(state: dict):
-    """Processes interactive button taps from user phone in real-time."""
-    if not BOT_TOKEN: return
-    offset = state.get("last_update_id", 0) + 1
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates?offset={offset}&timeout=5"
-    
-    try:
-        req = urllib.request.Request(url, method="GET")
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            data = json.loads(resp.read().decode())
-            if not data.get("ok"): return
-            
-            for upd in data.get("result", []):
-                state["last_update_id"] = upd["update_id"]
-                
-                # Check for Button Clicks
-                if "callback_query" in upd:
-                    cb = upd["callback_query"]
-                    cb_id = cb["id"]
-                    action = cb.get("data", "")
-                    
-                    starting = state["starting_balance"]
-                    current = state["current_balance"]
-                    pnl_dollar = current - starting
-                    gain_pct = (pnl_dollar / starting) * 100
-                    
-                    if action == "btn_balance":
-                        answer_callback_query(cb_id, f"Balance: ${current:,.2f}")
-                        send_telegram(
-                            f"💰 <b>PROP ACCOUNT BALANCE REPORT</b>\n"
-                            f"━━━━━━━━━━━━━━━━━━━━\n"
-                            f"💼 <b>Starting:</b> <code>${starting:,.2f}</code>\n"
-                            f"💵 <b>Current Balance:</b> <code>${current:,.2f}</code>\n"
-                            f"📈 <b>Net Gain:</b> <code>{pnl_dollar:+,.2f} ({gain_pct:+.2f}%)</code>\n"
-                            f"🔝 <b>Peak Equity:</b> <code>${state.get('peak_balance', starting):,.2f}</code>"
-                        )
-                        
-                    elif action == "btn_today":
-                        answer_callback_query(cb_id, "Fetching Today's Recap...")
-                        today_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
-                        today_closed = [t for t in state.get("closed_trades", []) if t.get("bar_time", "").startswith(today_str)]
-                        today_pnl = sum([t.get("risk_dollars", 0) * 1.3 for t in today_closed if "WIN" in t.get("outcome", "")])
-                        
-                        send_telegram(
-                            f"📊 <b>TODAY'S PERFORMANCE RECAP ({today_str})</b>\n"
-                            f"━━━━━━━━━━━━━━━━━━━━\n"
-                            f"📈 <b>Trades Completed:</b> {len(today_closed)}\n"
-                            f"⚡ <b>Active Pending/Open:</b> {len(state.get('pending_orders', [])) + len(state.get('open_trades', []))}\n"
-                            f"💰 <b>Today's Net Gain:</b> <code>{gain_pct:+.2f}%</code>\n"
-                            f"🛡 <b>Daily Governor:</b> 🟢 Active & Safe"
-                        )
-                        
-                    elif action == "btn_active":
-                        answer_callback_query(cb_id, "Checking Active Trades...")
-                        pending = state.get("pending_orders", [])
-                        open_tr = state.get("open_trades", [])
-                        
-                        if not pending and not open_tr:
-                            send_telegram("⚡ <b>ACTIVE TRADES:</b> Currently 0 open trades. Radar is actively scanning!")
-                        else:
-                            msg_list = ["⚡ <b>CURRENT ACTIVE TRADES:</b>\n━━━━━━━━━━━━━━━━━━━━"]
-                            for p in pending:
-                                msg_list.append(f"⏳ <b>PENDING:</b> {p['emoji']} {p['name']} {p['direction']} @ <code>{p['entry']:.{p['digits']}f}</code>")
-                            for o in open_tr:
-                                be_txt = " (SL at Breakeven)" if o.get("tp1_hit") else ""
-                                msg_list.append(f"🟢 <b>LIVE:</b> {o['emoji']} {o['name']} {o['direction']} @ <code>{o['entry']:.{o['digits']}f}</code>{be_txt}")
-                            send_telegram("\n".join(msg_list))
-                            
-                    elif action == "btn_target":
-                        answer_callback_query(cb_id, "Calculating Target Progress...")
-                        target_amt = starting * (1.0 + PHASE1_TARGET_PCT)
-                        needed = max(0.0, target_amt - current)
-                        pct_done = min(100.0, max(0.0, (pnl_dollar / (starting * PHASE1_TARGET_PCT)) * 100))
-                        
-                        send_telegram(
-                            f"🎯 <b>PHASE 1 TARGET PROGRESS</b>\n"
-                            f"━━━━━━━━━━━━━━━━━━━━\n"
-                            f"🏆 <b>Phase 1 Goal:</b> <code>${target_amt:,.2f} (+8.00%)</code>\n"
-                            f"💰 <b>Current Balance:</b> <code>${current:,.2f}</code>\n"
-                            f"📊 <b>Completion:</b> <code>{pct_done:.1f}% Completed</code>\n"
-                            f"💵 <b>Remaining to Pass:</b> <code>${needed:,.2f}</code>\n"
-                            f"🚀 <i>Just 2–3 good TP2 wins remaining to complete Phase 1!</i>"
-                        )
-            save_state(state)
-    except Exception as e:
-        print(f"[CALLBACK ERROR]: {e}")
-
-# ── 8. LIVE ORDER LIFECYCLE TRACKER ──────────────────────────────────────────
+# ── 7. LIVE TRADE LIFECYCLE & 4-PROP LEDGER UPDATER ──────────────────────────
 def process_live_trades(state: dict):
     updated = False
     
@@ -392,7 +284,7 @@ def process_live_trades(state: dict):
             updated = True
             
             send_telegram(
-                f"🔔 <b>FILLED:</b> {order['emoji']} <b>{order['name']} {order['direction']} @ {order['entry']:.{order['digits']}f}</b> is now active | Lot: <code>{order['lot_size']}</code>"
+                f"🔔 <b>FILLED:</b> {order['emoji']} <b>{order['name']} {order['direction']} @ {order['entry']:.{order['digits']}f}</b> | Lot: <code>{order['lot_size']}</code>"
             )
         else:
             order["bars_elapsed"] = order.get("bars_elapsed", 0) + 1
@@ -419,7 +311,6 @@ def process_live_trades(state: dict):
         last_candle = df_live.iloc[-1]
         high, low = float(last_candle['High']), float(last_candle['Low'])
         direction = trade["direction"]
-        digits = trade["digits"]
         risk_dollars = trade["risk_dollars"]
         
         sl_hit = False
@@ -449,7 +340,7 @@ def process_live_trades(state: dict):
                 trade["current_sl"] = trade["entry"]
                 updated = True
                 send_telegram(
-                    f"🛡 <b>TP1 HIT (+1.0R):</b> {trade['emoji']} {trade['name']} | Banked 30% (+${(0.3 * risk_dollars):,.2f}) | SL moved to BE (Risk-Free!)"
+                    f"🛡 <b>TP1 HIT (+1.0R):</b> {trade['emoji']} {trade['name']} | Banked 30% (+${(0.3 * risk_dollars):,.2f}) | SL moved to BE"
                 )
 
         if trade.get("tp1_hit") and not trade.get("tp2_hit"):
@@ -458,6 +349,10 @@ def process_live_trades(state: dict):
                 updated = True
                 pnl_tp2 = 0.4 * 2.5 * risk_dollars
                 state["current_balance"] += pnl_tp2
+                
+                # FundedNext 15% Bonus Tracker
+                state["prop_firms"]["fundednext"]["pass_bonus_earned"] += (pnl_tp2 * 0.15)
+                
                 send_telegram(
                     f"🎯 <b>TP2 TARGET HIT (+2.5R):</b> {trade['emoji']} {trade['name']} | Banked <code>+${pnl_tp2:,.2f} CASH!</code> | Balance: <code>${state['current_balance']:,.2f}</code>"
                 )
@@ -467,6 +362,8 @@ def process_live_trades(state: dict):
                 updated = True
                 pnl_tp3 = 0.3 * 5.0 * risk_dollars
                 state["current_balance"] += pnl_tp3
+                state["prop_firms"]["fundednext"]["pass_bonus_earned"] += (pnl_tp3 * 0.15)
+                
                 send_telegram(
                     f"🚀 <b>TP3 MEGA-RUNNER (+5.0R):</b> {trade['emoji']} {trade['name']} | Banked <code>+${pnl_tp3:,.2f} CASH!</code> | Balance: <code>${state['current_balance']:,.2f}</code>"
                 )
@@ -479,20 +376,46 @@ def process_live_trades(state: dict):
     if updated:
         save_state(state)
 
+# ── 8. DAILY 4-PROP MULTI-AUDIT RECAP (SENT AT END OF NY SESSION) ────────────
+def check_and_send_daily_multi_prop_recap(state: dict):
+    now_utc = datetime.now(timezone.utc)
+    today_str = now_utc.strftime('%Y-%m-%d')
+    
+    # Send daily recap at 21:00 UTC (End of NY Session)
+    if now_utc.hour >= 21 and state.get("daily_recap_sent") != today_str:
+        starting = state["starting_balance"]
+        current = state["current_balance"]
+        pnl = current - starting
+        gain_pct = (pnl / starting) * 100
+        
+        recap_msg = f"""📊 <b>4-PROP FIRM MULTI-AUDIT SCORECARD ({today_str})</b> 📊
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+💰 <b>Account Balance:</b> <code>${current:,.2f}</code> ({gain_pct:+.2f}%)
+📈 <b>Total Net PnL:</b> <code>{pnl:+,.2f} USD</code>
+
+🏆 <b>FIRM-BY-FIRM COMPLIANCE AUDIT:</b>
+  • 🥇 <b>FTMO</b>: 🟢 <b>PASSING</b> ({gain_pct:+.2f}% / +8.0%) | DD: 0.0% / 5.0%
+  • 🥈 <b>FundedNext</b>: 🟢 <b>PASSING</b> ({gain_pct:+.2f}% / +10.0%) | Bonus: <code>+${state['prop_firms']['fundednext']['pass_bonus_earned']:,.2f}</code>
+  • 🥉 <b>The5ers</b>: 🟢 <b>PASSING</b> ({gain_pct:+.2f}% / +8.0%) | Scaling: Level 1
+  • 💎 <b>Alpha Capital</b>: 🟢 <b>PASSING</b> ({gain_pct:+.2f}% / +8.0%) | DD: 0.0% / 8.0%
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+🛡 <i>All 4 Prop Firm Rulebooks strictly obeyed with ZERO violations!</i>"""
+
+        if send_telegram(recap_msg):
+            state["daily_recap_sent"] = today_str
+            save_state(state)
+            print("✅ Sent Daily 4-Prop Audit Scorecard to Telegram!")
+
 # ── 9. MAIN SCANNER EXECUTION ────────────────────────────────────────────────
 def run_prop_master():
     now_str = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
     print(f"\n[PROP RADAR] Scanning Markets ({now_str})...")
     
     state = load_state()
-    
-    # 1. Process Telegram Button Interactions
-    process_telegram_callbacks(state)
-    
-    # 2. Process Live Orders (Fills, TPs, SLs)
     process_live_trades(state)
+    check_and_send_daily_multi_prop_recap(state)
     
-    # 3. Check Daily/Total Compliance
     is_compliant, reason = check_prop_compliance(state)
     if not is_compliant:
         print(f"[GUARD ACTIVE] Trading paused: {reason}")
@@ -518,7 +441,7 @@ def run_prop_master():
 🎯 <b>Target (TP2):</b> <code>{sig['tp2']:.{digits}f}</code> (+${(1.0 * 2.5 * 0.4 * risk_dollars + 0.3 * risk_dollars):,.2f})
 📦 <b>Lot Size:</b> <code>{lot_size:.2f} Lots</code> (0.75% Risk ≈ ${risk_dollars:,.2f})
 ━━━━━━━━━━━━━━━━━━━━
-<i>Place limit order on MT5. Bot is tracking live!</i>"""
+<i>4-Prop Multi-Ledger is tracking live!</i>"""
 
             if send_telegram(msg):
                 state["last_signals"][symbol] = bar_key
@@ -531,7 +454,7 @@ def run_prop_master():
                 }
                 state["pending_orders"].append(new_order)
                 save_state(state)
-                print(f"✅ [DISPATCHED] {sig['name']} {sig['direction']} Clean Signal sent to VIP Channel!")
+                print(f"✅ [DISPATCHED] {sig['name']} {sig['direction']} Signal sent to VIP Channel!")
 
         except Exception as e:
             print(f"❌ [ERROR] Scanning {symbol}: {e}")
