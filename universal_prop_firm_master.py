@@ -29,8 +29,8 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
     except Exception: pass
 
 # ── 1. CONFIGURATION & TELEGRAM CREDENTIALS ──────────────────────────────────
-BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8805795541:AAFQxtzJrvJQlfBVazkVm4KwvSh9FSgfDro")
-CHAT_ID   = os.environ.get("TELEGRAM_CHANNEL_ID", os.environ.get("TELEGRAM_CHAT_ID", "-1004414824960"))
+BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "8786852632:AAGHhcdtsk6OiS2Zp4mCCwolfK6A0zlldZA")
+CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID", os.environ.get("TELEGRAM_CHANNEL_ID", "5477873575"))
 
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "universal_prop_state.json")
 
