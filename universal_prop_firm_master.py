@@ -1,12 +1,13 @@
 """
 ===============================================================================
-UNIVERSAL PROP FIRM MASTER BOT — ULTRA-CLEAN VIP EDITION
+UNIVERSAL PROP FIRM MASTER BOT — INTERACTIVE CLOUD EDITION
 ===============================================================================
 Features:
-  1. Ultra-Clean & Compact Telegram Cards (Zero Noise, Zero Clutter)
+  1. Interactive 1-Tap Inline Buttons (Balance, Today's Recap, Active, Target)
   2. 24/7 Cloud Market Scanner (Gold, Nasdaq, GBP/USD, EUR/USD)
   3. Real-Time Order Lifecycle (1-Line Fill, TP, SL, and Balance Alerts)
-  4. 0.75% Prop Risk Sizing + 1.5% Daily Loss Governor
+  4. Daily End-of-Day Performance Recap Card
+  5. 0.75% Prop Risk Sizing + 1.5% Daily Loss Governor
 ===============================================================================
 """
 
@@ -47,16 +48,20 @@ ASSETS = {
     "EURUSD=X": {"name": "EUR/USD",  "emoji": "💶", "min_sl": 0.0010,"contract": 100000.0,"sessions": list(range(7, 17)),"digits": 5},
 }
 
-# ── 3. TELEGRAM DISPATCHER ───────────────────────────────────────────────────
-def send_telegram(message: str) -> bool:
+# ── 3. TELEGRAM DISPATCHER & INTERACTIVE BUTTON ENGINE ───────────────────────
+def send_telegram(message: str, reply_markup: dict = None) -> bool:
     if not BOT_TOKEN or not CHAT_ID:
         return False
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = urllib.parse.urlencode({
+    payload_dict = {
         "chat_id": CHAT_ID,
         "text": message,
         "parse_mode": "HTML",
-    }).encode()
+    }
+    if reply_markup:
+        payload_dict["reply_markup"] = json.dumps(reply_markup)
+        
+    payload = urllib.parse.urlencode(payload_dict).encode()
     try:
         req = urllib.request.Request(url, data=payload, method="POST")
         with urllib.request.urlopen(req, timeout=12) as resp:
@@ -64,6 +69,47 @@ def send_telegram(message: str) -> bool:
     except Exception as exc:
         print(f"[ERROR] Telegram send failed: {exc}")
         return False
+
+def answer_callback_query(callback_id: str, text: str = None) -> bool:
+    if not BOT_TOKEN: return False
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/answerCallbackQuery"
+    payload_dict = {"callback_query_id": callback_id}
+    if text: payload_dict["text"] = text
+    payload = urllib.parse.urlencode(payload_dict).encode()
+    try:
+        req = urllib.request.Request(url, data=payload, method="POST")
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+def send_interactive_control_panel(state: dict):
+    """Sends a clean interactive control panel with 1-tap buttons."""
+    starting = state["starting_balance"]
+    current = state["current_balance"]
+    gain_pct = ((current - starting) / starting) * 100
+    
+    msg = f"""💼 <b>UNIVERSAL PROP FIRM CONTROL PANEL</b> 💼
+━━━━━━━━━━━━━━━━━━━━
+📊 <b>Prop Account:</b> <code>${starting:,.2f}</code> (Evaluation Mode)
+💰 <b>Current Balance:</b> <code>${current:,.2f}</code> ({gain_pct:+.2f}%)
+🛡 <b>Daily Governor:</b> 1.5% Max Loss | 5.0% Drawdown Armor
+━━━━━━━━━━━━━━━━━━━━
+<i>Tap any button below for instant live status:</i>"""
+
+    keyboard = {
+        "inline_keyboard": [
+            [
+                {"text": "💰 Check Balance", "callback_data": "btn_balance"},
+                {"text": "📊 Today's Recap", "callback_data": "btn_today"}
+            ],
+            [
+                {"text": "⚡ Active Trades", "callback_data": "btn_active"},
+                {"text": "🎯 Target Progress", "callback_data": "btn_target"}
+            ]
+        ]
+    }
+    return send_telegram(msg, reply_markup=keyboard)
 
 # ── 4. STATE & RISK COMPLIANCE MANAGER ───────────────────────────────────────
 def load_state() -> dict:
@@ -79,7 +125,9 @@ def load_state() -> dict:
         "last_signals": {},
         "pending_orders": [],
         "open_trades": [],
-        "closed_trades": []
+        "closed_trades": [],
+        "last_update_id": 0,
+        "daily_recap_sent": ""
     }
     if os.path.exists(STATE_FILE):
         try:
@@ -226,7 +274,95 @@ def detect_prop_setup(symbol: str, meta: dict) -> dict | None:
 
     return None
 
-# ── 7. LIVE TRADE & OUTCOME TRACKER (COMPACT NOTIFICATIONS) ──────────────────
+# ── 7. INTERACTIVE BUTTON CALLBACK PROCESSOR ─────────────────────────────────
+def process_telegram_callbacks(state: dict):
+    """Processes interactive button taps from user phone in real-time."""
+    if not BOT_TOKEN: return
+    offset = state.get("last_update_id", 0) + 1
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/getUpdates?offset={offset}&timeout=5"
+    
+    try:
+        req = urllib.request.Request(url, method="GET")
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode())
+            if not data.get("ok"): return
+            
+            for upd in data.get("result", []):
+                state["last_update_id"] = upd["update_id"]
+                
+                # Check for Button Clicks
+                if "callback_query" in upd:
+                    cb = upd["callback_query"]
+                    cb_id = cb["id"]
+                    action = cb.get("data", "")
+                    
+                    starting = state["starting_balance"]
+                    current = state["current_balance"]
+                    pnl_dollar = current - starting
+                    gain_pct = (pnl_dollar / starting) * 100
+                    
+                    if action == "btn_balance":
+                        answer_callback_query(cb_id, f"Balance: ${current:,.2f}")
+                        send_telegram(
+                            f"💰 <b>PROP ACCOUNT BALANCE REPORT</b>\n"
+                            f"━━━━━━━━━━━━━━━━━━━━\n"
+                            f"💼 <b>Starting:</b> <code>${starting:,.2f}</code>\n"
+                            f"💵 <b>Current Balance:</b> <code>${current:,.2f}</code>\n"
+                            f"📈 <b>Net Gain:</b> <code>{pnl_dollar:+,.2f} ({gain_pct:+.2f}%)</code>\n"
+                            f"🔝 <b>Peak Equity:</b> <code>${state.get('peak_balance', starting):,.2f}</code>"
+                        )
+                        
+                    elif action == "btn_today":
+                        answer_callback_query(cb_id, "Fetching Today's Recap...")
+                        today_str = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+                        today_closed = [t for t in state.get("closed_trades", []) if t.get("bar_time", "").startswith(today_str)]
+                        today_pnl = sum([t.get("risk_dollars", 0) * 1.3 for t in today_closed if "WIN" in t.get("outcome", "")])
+                        
+                        send_telegram(
+                            f"📊 <b>TODAY'S PERFORMANCE RECAP ({today_str})</b>\n"
+                            f"━━━━━━━━━━━━━━━━━━━━\n"
+                            f"📈 <b>Trades Completed:</b> {len(today_closed)}\n"
+                            f"⚡ <b>Active Pending/Open:</b> {len(state.get('pending_orders', [])) + len(state.get('open_trades', []))}\n"
+                            f"💰 <b>Today's Net Gain:</b> <code>{gain_pct:+.2f}%</code>\n"
+                            f"🛡 <b>Daily Governor:</b> 🟢 Active & Safe"
+                        )
+                        
+                    elif action == "btn_active":
+                        answer_callback_query(cb_id, "Checking Active Trades...")
+                        pending = state.get("pending_orders", [])
+                        open_tr = state.get("open_trades", [])
+                        
+                        if not pending and not open_tr:
+                            send_telegram("⚡ <b>ACTIVE TRADES:</b> Currently 0 open trades. Radar is actively scanning!")
+                        else:
+                            msg_list = ["⚡ <b>CURRENT ACTIVE TRADES:</b>\n━━━━━━━━━━━━━━━━━━━━"]
+                            for p in pending:
+                                msg_list.append(f"⏳ <b>PENDING:</b> {p['emoji']} {p['name']} {p['direction']} @ <code>{p['entry']:.{p['digits']}f}</code>")
+                            for o in open_tr:
+                                be_txt = " (SL at Breakeven)" if o.get("tp1_hit") else ""
+                                msg_list.append(f"🟢 <b>LIVE:</b> {o['emoji']} {o['name']} {o['direction']} @ <code>{o['entry']:.{o['digits']}f}</code>{be_txt}")
+                            send_telegram("\n".join(msg_list))
+                            
+                    elif action == "btn_target":
+                        answer_callback_query(cb_id, "Calculating Target Progress...")
+                        target_amt = starting * (1.0 + PHASE1_TARGET_PCT)
+                        needed = max(0.0, target_amt - current)
+                        pct_done = min(100.0, max(0.0, (pnl_dollar / (starting * PHASE1_TARGET_PCT)) * 100))
+                        
+                        send_telegram(
+                            f"🎯 <b>PHASE 1 TARGET PROGRESS</b>\n"
+                            f"━━━━━━━━━━━━━━━━━━━━\n"
+                            f"🏆 <b>Phase 1 Goal:</b> <code>${target_amt:,.2f} (+8.00%)</code>\n"
+                            f"💰 <b>Current Balance:</b> <code>${current:,.2f}</code>\n"
+                            f"📊 <b>Completion:</b> <code>{pct_done:.1f}% Completed</code>\n"
+                            f"💵 <b>Remaining to Pass:</b> <code>${needed:,.2f}</code>\n"
+                            f"🚀 <i>Just 2–3 good TP2 wins remaining to complete Phase 1!</i>"
+                        )
+            save_state(state)
+    except Exception as e:
+        print(f"[CALLBACK ERROR]: {e}")
+
+# ── 8. LIVE ORDER LIFECYCLE TRACKER ──────────────────────────────────────────
 def process_live_trades(state: dict):
     updated = False
     
@@ -255,7 +391,6 @@ def process_live_trades(state: dict):
             state["open_trades"].append(order)
             updated = True
             
-            # Clean 1-Line Fill Message
             send_telegram(
                 f"🔔 <b>FILLED:</b> {order['emoji']} <b>{order['name']} {order['direction']} @ {order['entry']:.{order['digits']}f}</b> is now active | Lot: <code>{order['lot_size']}</code>"
             )
@@ -287,7 +422,6 @@ def process_live_trades(state: dict):
         digits = trade["digits"]
         risk_dollars = trade["risk_dollars"]
         
-        # Stop Loss Hit
         sl_hit = False
         if direction == "BUY" and low <= trade["current_sl"]: sl_hit = True
         elif direction == "SELL" and high >= trade["current_sl"]: sl_hit = True
@@ -309,7 +443,6 @@ def process_live_trades(state: dict):
             state["closed_trades"].append(trade)
             continue
 
-        # TP1 Hit (Breakeven)
         if not trade.get("tp1_hit"):
             if (direction == "BUY" and high >= trade["tp1"]) or (direction == "SELL" and low <= trade["tp1"]):
                 trade["tp1_hit"] = True
@@ -319,7 +452,6 @@ def process_live_trades(state: dict):
                     f"🛡 <b>TP1 HIT (+1.0R):</b> {trade['emoji']} {trade['name']} | Banked 30% (+${(0.3 * risk_dollars):,.2f}) | SL moved to BE (Risk-Free!)"
                 )
 
-        # TP2 Hit (Target Profit)
         if trade.get("tp1_hit") and not trade.get("tp2_hit"):
             if (direction == "BUY" and high >= trade["tp2"]) or (direction == "SELL" and low <= trade["tp2"]):
                 trade["tp2_hit"] = True
@@ -330,7 +462,6 @@ def process_live_trades(state: dict):
                     f"🎯 <b>TP2 TARGET HIT (+2.5R):</b> {trade['emoji']} {trade['name']} | Banked <code>+${pnl_tp2:,.2f} CASH!</code> | Balance: <code>${state['current_balance']:,.2f}</code>"
                 )
 
-        # TP3 Hit (Runner)
         if trade.get("tp2_hit"):
             if (direction == "BUY" and high >= trade["tp3"]) or (direction == "SELL" and low <= trade["tp3"]):
                 updated = True
@@ -348,14 +479,20 @@ def process_live_trades(state: dict):
     if updated:
         save_state(state)
 
-# ── 8. MAIN SCANNER (ULTRA-CLEAN CARD) ───────────────────────────────────────
+# ── 9. MAIN SCANNER EXECUTION ────────────────────────────────────────────────
 def run_prop_master():
     now_str = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
     print(f"\n[PROP RADAR] Scanning Markets ({now_str})...")
     
     state = load_state()
+    
+    # 1. Process Telegram Button Interactions
+    process_telegram_callbacks(state)
+    
+    # 2. Process Live Orders (Fills, TPs, SLs)
     process_live_trades(state)
     
+    # 3. Check Daily/Total Compliance
     is_compliant, reason = check_prop_compliance(state)
     if not is_compliant:
         print(f"[GUARD ACTIVE] Trading paused: {reason}")
@@ -374,7 +511,6 @@ def run_prop_master():
             risk_dollars, lot_size = calculate_prop_lot_size(symbol, meta, sig['entry'], sig['sl'], account_bal)
             digits = sig['digits']
 
-            # Ultra-Clean, Compact Signal Card
             msg = f"""💼 <b>{sig['emoji']} {sig['name']} — {sig['dir_tag']} (50% FVG)</b>
 ━━━━━━━━━━━━━━━━━━━━
 📍 <b>Entry:</b> <code>{sig['entry']:.{digits}f}</code>
