@@ -1,13 +1,12 @@
-name: Plan B AI-Copilot Cloud Scanner
+name: Universal Prop Firm Cloud Market Radar
 
-# on:
-#   schedule:
-#     - cron: '*/15 6-20 * * 1-5'
 on:
-  workflow_dispatch:  # Manual trigger only
+  schedule:
+    - cron: '*/15 * * * 1-5'  # Scans every 15 minutes during active trading days
+  workflow_dispatch:          # Allows manual trigger anytime
 
 jobs:
-  run-scanner:
+  run-radar:
     runs-on: ubuntu-latest
 
     steps:
@@ -22,20 +21,21 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install yfinance numpy pandas pytz scikit-learn google-generativeai
+          pip install yfinance numpy pandas pytz
 
-      - name: Run Plan B Adaptive AI Scanner
+      - name: Run Universal Prop Firm Master Bot
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PROP_ACCOUNT_SIZE: 25000.0
         run: |
-          python plan_b_adaptive.py
+          python universal_prop_firm_master.py
 
-      - name: Persist Trade History & Self-Learning Memory
+      - name: Persist Prop State & Balance
         run: |
-          git config --global user.name 'PlanB-Cloud-Bot'
-          git config --global user.email 'bot@planb.ai'
-          git add adaptive_sent_signals.json adaptive_active_trades.json adaptive_trade_history.json adaptive_balance.json adaptive_learning_log.json adaptive_rules.json adaptive_confidence.json || true
-          git commit -m "Auto-update state & learning logs [skip ci]" || true
+          git config --global user.name 'Prop-Cloud-Bot'
+          git config --global user.email 'bot@prop.ai'
+          git add universal_prop_state.json || true
+          git commit -m "Auto-update Prop Bot state [skip ci]" || true
           git push || true
