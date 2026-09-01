@@ -1,18 +1,12 @@
 """
 ===============================================================================
-UNIVERSAL PROP FIRM MASTER BOT — LIVE FORWARD OUTCOME TRACKER
+UNIVERSAL PROP FIRM MASTER BOT — ULTRA-CLEAN VIP EDITION
 ===============================================================================
 Features:
-  1. 24/7 Cloud Market Scanner (Gold, Nasdaq, GBP/USD, EUR/USD)
-  2. Live Forward Signal Dispatcher to Telegram VIP Channel
-  3. Real-Time Order Lifecycle Manager:
-     - Pending Limit Order Monitoring (8-bar expiry)
-     - Order Fill Notifications
-     - TP1 Breakeven Shield Notifications
-     - TP2 Target Profit Notifications (+$468.75)
-     - TP3 Mega-Runner Notifications (+$937.50)
-     - Stop Loss / Drawdown Notifications
-  4. Live $25,000 Prop Account Balance Tracking & Daily Scorecards
+  1. Ultra-Clean & Compact Telegram Cards (Zero Noise, Zero Clutter)
+  2. 24/7 Cloud Market Scanner (Gold, Nasdaq, GBP/USD, EUR/USD)
+  3. Real-Time Order Lifecycle (1-Line Fill, TP, SL, and Balance Alerts)
+  4. 0.75% Prop Risk Sizing + 1.5% Daily Loss Governor
 ===============================================================================
 """
 
@@ -47,16 +41,15 @@ PHASE1_TARGET_PCT = 0.08       # +8.00% Profit Target ($2,000 on $25k)
 
 # ── 2. ASSET UNIVERSE & SESSIONS ─────────────────────────────────────────────
 ASSETS = {
-    "GC=F":     {"name": "GOLD (XAU/USD)",    "emoji": "🥇", "min_sl": 1.5,   "contract": 100.0, "sessions": list(range(7, 18)),  "digits": 2, "mt5_sym": "XAUUSD"},
-    "NQ=F":     {"name": "NASDAQ (US100)",    "emoji": "📈", "min_sl": 15.0,  "contract": 20.0,  "sessions": list(range(12, 21)), "digits": 2, "mt5_sym": "US100"},
-    "GBPUSD=X": {"name": "GBP/USD",           "emoji": "💷", "min_sl": 0.0010,"contract": 100000.0,"sessions": list(range(7, 17)),"digits": 5, "mt5_sym": "GBPUSD"},
-    "EURUSD=X": {"name": "EUR/USD",           "emoji": "💶", "min_sl": 0.0010,"contract": 100000.0,"sessions": list(range(7, 17)),"digits": 5, "mt5_sym": "EURUSD"},
+    "GC=F":     {"name": "GOLD",     "emoji": "🥇", "min_sl": 1.5,   "contract": 100.0, "sessions": list(range(7, 18)),  "digits": 2},
+    "NQ=F":     {"name": "NASDAQ",   "emoji": "📈", "min_sl": 15.0,  "contract": 20.0,  "sessions": list(range(12, 21)), "digits": 2},
+    "GBPUSD=X": {"name": "GBP/USD",  "emoji": "💷", "min_sl": 0.0010,"contract": 100000.0,"sessions": list(range(7, 17)),"digits": 5},
+    "EURUSD=X": {"name": "EUR/USD",  "emoji": "💶", "min_sl": 0.0010,"contract": 100000.0,"sessions": list(range(7, 17)),"digits": 5},
 }
 
 # ── 3. TELEGRAM DISPATCHER ───────────────────────────────────────────────────
 def send_telegram(message: str) -> bool:
     if not BOT_TOKEN or not CHAT_ID:
-        print("[WARN] Telegram credentials not configured.")
         return False
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = urllib.parse.urlencode({
@@ -116,39 +109,34 @@ def check_prop_compliance(state: dict) -> tuple[bool, str]:
     starting_bal = state["starting_balance"]
     current_bal = state["current_balance"]
     
-    # 1. Target Hit (+8.0%)
     if current_bal >= starting_bal * (1.0 + PHASE1_TARGET_PCT):
         if not state.get("is_challenge_passed"):
             state["is_challenge_passed"] = True
             save_state(state)
             send_telegram(
-                f"🎉🏆 <b>CONGRATULATIONS! PROP CHALLENGE PASSED!</b> 🏆🎉\n\n"
-                f"💼 Starting Balance: <code>${starting_bal:,.2f}</code>\n"
-                f"💰 Final Balance   : <code>${current_bal:,.2f}</code> (+{((current_bal-starting_bal)/starting_bal)*100:.2f}%)\n\n"
-                f"🔒 <i>All trading halted to lock in your victory. Proceed to Phase 2 / Live Funded Account!</i>"
+                f"🏆 <b>PROP CHALLENGE PASSED (+8.0%)!</b>\n"
+                f"💰 Balance: <code>${current_bal:,.2f}</code> | All trades halted to secure funded account!"
             )
         return False, "Target Hit (+8.0%) - Challenge Passed!"
 
-    # 2. Daily Loss Limit (1.5%)
     daily_start = state["daily_start_balance"]
     daily_drawdown = daily_start - current_bal
     if daily_drawdown >= (starting_bal * DAILY_LOSS_LIMIT_PCT):
         state["is_daily_locked"] = True
         save_state(state)
-        return False, f"Daily Loss Governor Triggered (-${daily_drawdown:,.2f}). Halted until tomorrow."
+        return False, f"Daily Loss Governor (-${daily_drawdown:,.2f}). Halted until tomorrow."
 
-    # 3. Total Drawdown (5.0%)
     peak = state.get("peak_balance", starting_bal)
     if current_bal > peak:
         state["peak_balance"] = current_bal
         peak = current_bal
     total_dd = peak - current_bal
     if total_dd >= (starting_bal * TOTAL_DRAWDOWN_LIMIT_PCT):
-        return False, f"Maximum Drawdown Shield Active (-${total_dd:,.2f}). Trading paused for safety."
+        return False, f"Max Drawdown Shield (-${total_dd:,.2f}). Trading paused."
 
     return True, "Compliant"
 
-# ── 5. POSITION SIZING & LOT SIZE CALCULATOR ─────────────────────────────────
+# ── 5. POSITION SIZING ───────────────────────────────────────────────────────
 def calculate_prop_lot_size(symbol: str, meta: dict, entry: float, sl: float, account_balance: float) -> tuple[float, float]:
     risk_dollars = account_balance * RISK_PERCENT
     sl_dist = abs(entry - sl)
@@ -156,10 +144,7 @@ def calculate_prop_lot_size(symbol: str, meta: dict, entry: float, sl: float, ac
         return risk_dollars, 0.01
 
     contract_size = meta.get("contract", 100.0)
-    
-    if "USD" in symbol and "EUR" in symbol:
-        lot_size = risk_dollars / (sl_dist * contract_size)
-    elif "USD" in symbol and "GBP" in symbol:
+    if "USD" in symbol and ("EUR" in symbol or "GBP" in symbol):
         lot_size = risk_dollars / (sl_dist * contract_size)
     elif "GC" in symbol:
         lot_size = risk_dollars / (sl_dist * 100.0)
@@ -171,7 +156,7 @@ def calculate_prop_lot_size(symbol: str, meta: dict, entry: float, sl: float, ac
     lot_size = max(0.01, round(lot_size, 2))
     return risk_dollars, lot_size
 
-# ── 6. CORE 15M LIQUIDITY SWEEP & 50% FVG ENGINE ─────────────────────────────
+# ── 6. 15M SETUP DETECTION ───────────────────────────────────────────────────
 def detect_prop_setup(symbol: str, meta: dict) -> dict | None:
     now_utc = datetime.now(timezone.utc)
     hr = now_utc.hour
@@ -217,19 +202,10 @@ def detect_prop_setup(symbol: str, meta: dict) -> dict | None:
             tp3 = entry + (5.0 * sl_dist)
 
             return {
-                'symbol': symbol,
-                'name': meta['name'],
-                'emoji': meta['emoji'],
-                'direction': 'BUY',
-                'direction_emoji': '🟢',
-                'entry': entry,
-                'sl': sl,
-                'tp1': tp1,
-                'tp2': tp2,
-                'tp3': tp3,
-                'bar_time': bar_time,
-                'digits': meta['digits'],
-                'context': '15M Bullish Liquidity Sweep & 1H Trend Alignment'
+                'symbol': symbol, 'name': meta['name'], 'emoji': meta['emoji'],
+                'direction': 'BUY', 'dir_tag': '🟢 BUY',
+                'entry': entry, 'sl': sl, 'tp1': tp1, 'tp2': tp2, 'tp3': tp3,
+                'bar_time': bar_time, 'digits': meta['digits']
             }
 
         elif h > liq_h and c < liq_h and c < o and body >= 0.50 * atr and c <= (h_ema + 1.2 * atr):
@@ -242,30 +218,19 @@ def detect_prop_setup(symbol: str, meta: dict) -> dict | None:
             tp3 = entry - (5.0 * sl_dist)
 
             return {
-                'symbol': symbol,
-                'name': meta['name'],
-                'emoji': meta['emoji'],
-                'direction': 'SELL',
-                'direction_emoji': '🔴',
-                'entry': entry,
-                'sl': sl,
-                'tp1': tp1,
-                'tp2': tp2,
-                'tp3': tp3,
-                'bar_time': bar_time,
-                'digits': meta['digits'],
-                'context': '15M Bearish Liquidity Sweep & 1H Trend Alignment'
+                'symbol': symbol, 'name': meta['name'], 'emoji': meta['emoji'],
+                'direction': 'SELL', 'dir_tag': '🔴 SELL',
+                'entry': entry, 'sl': sl, 'tp1': tp1, 'tp2': tp2, 'tp3': tp3,
+                'bar_time': bar_time, 'digits': meta['digits']
             }
 
     return None
 
-# ── 7. LIVE TRADE & OUTCOME TRACKER ──────────────────────────────────────────
+# ── 7. LIVE TRADE & OUTCOME TRACKER (COMPACT NOTIFICATIONS) ──────────────────
 def process_live_trades(state: dict):
-    """Monitors active pending and open orders on live candles."""
-    now_utc = datetime.now(timezone.utc)
     updated = False
     
-    # 1. Check Pending Orders for Fills or Expirations
+    # 1. Pending Orders Check
     remaining_pending = []
     for order in state.get("pending_orders", []):
         symbol = order["symbol"]
@@ -279,10 +244,8 @@ def process_live_trades(state: dict):
         high, low = float(last_candle['High']), float(last_candle['Low'])
         
         filled = False
-        if order["direction"] == "BUY" and low <= order["entry"]:
-            filled = True
-        elif order["direction"] == "SELL" and high >= order["entry"]:
-            filled = True
+        if order["direction"] == "BUY" and low <= order["entry"]: filled = True
+        elif order["direction"] == "SELL" and high >= order["entry"]: filled = True
             
         if filled:
             order["fill_time"] = str(df_live.index[-1])
@@ -292,29 +255,23 @@ def process_live_trades(state: dict):
             state["open_trades"].append(order)
             updated = True
             
+            # Clean 1-Line Fill Message
             send_telegram(
-                f"🔔 <b>ORDER FILLED & LIVE!</b> 🔔\n\n"
-                f"📊 <b>Asset:</b> {order['emoji']} <b>{order['name']}</b>\n"
-                f"🎯 <b>Action:</b> {order['direction_emoji']} <b>{order['direction']} @ {order['entry']:.{order['digits']}f}</b>\n"
-                f"📦 <b>Lot Size:</b> <code>{order['lot_size']} Lots</code>\n"
-                f"🛡 <b>Initial SL:</b> <code>{order['sl']:.{order['digits']}f}</code>\n"
-                f"🎯 <b>Primary Target (TP2):</b> <code>{order['tp2']:.{order['digits']}f}</code>\n\n"
-                f"⚡ <i>Trade is active! Bot is tracking TP1 Breakeven and TP2 targets in real-time...</i>"
+                f"🔔 <b>FILLED:</b> {order['emoji']} <b>{order['name']} {order['direction']} @ {order['entry']:.{order['digits']}f}</b> is now active | Lot: <code>{order['lot_size']}</code>"
             )
         else:
             order["bars_elapsed"] = order.get("bars_elapsed", 0) + 1
-            if order["bars_elapsed"] > 8: # 2 hours expired
+            if order["bars_elapsed"] > 8:
                 updated = True
                 send_telegram(
-                    f"⚪ <b>LIMIT ORDER EXPIRED (Zero Risk):</b>\n"
-                    f"{order['emoji']} <b>{order['name']} {order['direction']}</b> @ {order['entry']:.{order['digits']}f} was not filled within 2 hours. Cancelled safely."
+                    f"⚪ <b>EXPIRED:</b> {order['emoji']} {order['name']} {order['direction']} @ {order['entry']:.{order['digits']}f} cancelled (No fill in 2h)."
                 )
             else:
                 remaining_pending.append(order)
 
     state["pending_orders"] = remaining_pending
 
-    # 2. Check Open Trades for TP1, TP2, TP3, or SL
+    # 2. Open Trades Check
     remaining_open = []
     for trade in state.get("open_trades", []):
         symbol = trade["symbol"]
@@ -330,53 +287,39 @@ def process_live_trades(state: dict):
         digits = trade["digits"]
         risk_dollars = trade["risk_dollars"]
         
-        # Check Stop Loss
+        # Stop Loss Hit
         sl_hit = False
-        if direction == "BUY" and low <= trade["current_sl"]:
-            sl_hit = True
-        elif direction == "SELL" and high >= trade["current_sl"]:
-            sl_hit = True
+        if direction == "BUY" and low <= trade["current_sl"]: sl_hit = True
+        elif direction == "SELL" and high >= trade["current_sl"]: sl_hit = True
             
         if sl_hit:
             updated = True
             if trade.get("tp1_hit"):
-                pnl = 0.3 * risk_dollars # Banked TP1 profit
+                pnl = 0.3 * risk_dollars
                 state["current_balance"] += pnl
-                trade["outcome"] = "BREAKEVEN"
                 send_telegram(
-                    f"🛡 <b>BREAKEVEN SHIELD TRIGGERED!</b>\n\n"
-                    f"📊 <b>Asset:</b> {trade['emoji']} <b>{trade['name']}</b>\n"
-                    f"💵 <b>Net Result:</b> <code>+${pnl:,.2f} Profit Banked!</code> (Zero Risk!)\n"
-                    f"💰 <b>Prop Balance:</b> <code>${state['current_balance']:,.2f}</code>"
+                    f"🛡 <b>BREAKEVEN CLOSED:</b> {trade['emoji']} {trade['name']} | Net: <code>+${pnl:,.2f}</code> | Balance: <code>${state['current_balance']:,.2f}</code>"
                 )
             else:
                 pnl = -risk_dollars
                 state["current_balance"] += pnl
-                trade["outcome"] = "STOP_LOSS"
                 send_telegram(
-                    f"🛑 <b>STOP LOSS HIT:</b>\n\n"
-                    f"📊 <b>Asset:</b> {trade['emoji']} <b>{trade['name']}</b>\n"
-                    f"💵 <b>Loss:</b> <code>-${risk_dollars:,.2f} (-0.75%)</code>\n"
-                    f"💰 <b>Prop Balance:</b> <code>${state['current_balance']:,.2f}</code> (Safely within daily limit)"
+                    f"🛑 <b>STOP LOSS:</b> {trade['emoji']} {trade['name']} | PnL: <code>-${risk_dollars:,.2f}</code> | Balance: <code>${state['current_balance']:,.2f}</code>"
                 )
             state["closed_trades"].append(trade)
             continue
 
-        # Check TP1 (+1.0R Breakeven Move)
+        # TP1 Hit (Breakeven)
         if not trade.get("tp1_hit"):
             if (direction == "BUY" and high >= trade["tp1"]) or (direction == "SELL" and low <= trade["tp1"]):
                 trade["tp1_hit"] = True
-                trade["current_sl"] = trade["entry"] # Move SL to Entry
+                trade["current_sl"] = trade["entry"]
                 updated = True
                 send_telegram(
-                    f"🛡🎯 <b>TP1 HIT (+1.0R)! STOP LOSS MOVED TO BREAKEVEN!</b> 🛡\n\n"
-                    f"📊 <b>Asset:</b> {trade['emoji']} <b>{trade['name']}</b>\n"
-                    f"💰 <b>Banked 30% Profit:</b> <code>+${(0.3 * risk_dollars):,.2f}</code>\n"
-                    f"🔒 <b>New Stop Loss:</b> <code>{trade['entry']:.{digits}f} (Entry)</code>\n\n"
-                    f"🎉 <i>This trade is now 100% RISK-FREE. Riding toward TP2 (+2.5R)...</i>"
+                    f"🛡 <b>TP1 HIT (+1.0R):</b> {trade['emoji']} {trade['name']} | Banked 30% (+${(0.3 * risk_dollars):,.2f}) | SL moved to BE (Risk-Free!)"
                 )
 
-        # Check TP2 (+2.5R Primary Target)
+        # TP2 Hit (Target Profit)
         if trade.get("tp1_hit") and not trade.get("tp2_hit"):
             if (direction == "BUY" and high >= trade["tp2"]) or (direction == "SELL" and low <= trade["tp2"]):
                 trade["tp2_hit"] = True
@@ -384,26 +327,17 @@ def process_live_trades(state: dict):
                 pnl_tp2 = 0.4 * 2.5 * risk_dollars
                 state["current_balance"] += pnl_tp2
                 send_telegram(
-                    f"🎯🔥 <b>TP2 TARGET HIT (+2.5R)! BIG PROFIT BANKED!</b> 🔥🎯\n\n"
-                    f"📊 <b>Asset:</b> {trade['emoji']} <b>{trade['name']}</b>\n"
-                    f"💵 <b>Banked 40% Target:</b> <code>+${pnl_tp2:,.2f} CASH!</code>\n"
-                    f"💰 <b>New Prop Balance:</b> <code>${state['current_balance']:,.2f}</code>\n\n"
-                    f"🚀 <i>Holding remaining 30% runner for TP3 (+5.0R Mega-Runner)...</i>"
+                    f"🎯 <b>TP2 TARGET HIT (+2.5R):</b> {trade['emoji']} {trade['name']} | Banked <code>+${pnl_tp2:,.2f} CASH!</code> | Balance: <code>${state['current_balance']:,.2f}</code>"
                 )
 
-        # Check TP3 (+5.0R Mega-Runner)
+        # TP3 Hit (Runner)
         if trade.get("tp2_hit"):
             if (direction == "BUY" and high >= trade["tp3"]) or (direction == "SELL" and low <= trade["tp3"]):
                 updated = True
                 pnl_tp3 = 0.3 * 5.0 * risk_dollars
                 state["current_balance"] += pnl_tp3
-                trade["outcome"] = "TP3_MEGA_WIN"
                 send_telegram(
-                    f"🚀🏆 <b>TP3 MEGA-RUNNER HIT (+5.0R)! MONSTER GAIN!</b> 🏆🚀\n\n"
-                    f"📊 <b>Asset:</b> {trade['emoji']} <b>{trade['name']}</b>\n"
-                    f"💵 <b>Banked 30% Runner:</b> <code>+${pnl_tp3:,.2f} CASH!</code>\n"
-                    f"💰 <b>Final Prop Balance:</b> <code>${state['current_balance']:,.2f}</code>\n"
-                    f"📈 <b>Progress to Target:</b> <code>+{((state['current_balance']-state['starting_balance'])/state['starting_balance'])*100:.2f}% / +8.00%</code>"
+                    f"🚀 <b>TP3 MEGA-RUNNER (+5.0R):</b> {trade['emoji']} {trade['name']} | Banked <code>+${pnl_tp3:,.2f} CASH!</code> | Balance: <code>${state['current_balance']:,.2f}</code>"
                 )
                 state["closed_trades"].append(trade)
                 continue
@@ -414,17 +348,14 @@ def process_live_trades(state: dict):
     if updated:
         save_state(state)
 
-# ── 8. MAIN SCANNER EXECUTION ────────────────────────────────────────────────
+# ── 8. MAIN SCANNER (ULTRA-CLEAN CARD) ───────────────────────────────────────
 def run_prop_master():
     now_str = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
     print(f"\n[PROP RADAR] Scanning Markets ({now_str})...")
     
     state = load_state()
-    
-    # 1. Process active live trades (Fills, TPs, SLs)
     process_live_trades(state)
     
-    # 2. Check compliance limits
     is_compliant, reason = check_prop_compliance(state)
     if not is_compliant:
         print(f"[GUARD ACTIVE] Trading paused: {reason}")
@@ -435,60 +366,36 @@ def run_prop_master():
     for symbol, meta in ASSETS.items():
         try:
             sig = detect_prop_setup(symbol, meta)
-            if not sig:
-                continue
+            if not sig: continue
 
             bar_key = f"{symbol}_{sig['bar_time']}_{sig['direction']}"
-            if state["last_signals"].get(symbol) == bar_key:
-                continue
+            if state["last_signals"].get(symbol) == bar_key: continue
 
             risk_dollars, lot_size = calculate_prop_lot_size(symbol, meta, sig['entry'], sig['sl'], account_bal)
             digits = sig['digits']
 
-            msg = f"""💼 <b>UNIVERSAL PROP FIRM SIGNAL CARD</b> 💼
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 <b>Asset:</b> {sig['emoji']} <b>{sig['name']}</b>
-🎯 <b>Action:</b> {sig['direction_emoji']} <b>{sig['direction']} (50% FVG Retest)</b>
-📦 <b>Recommended Lot Size:</b> <code>{lot_size:.2f} Lots</code> (0.75% Risk ≈ ${risk_dollars:,.2f})
-
-📍 <b>Entry Price:</b> <code>{sig['entry']:.{digits}f}</code>
-🛡 <b>Hard Stop Loss:</b> <code>{sig['sl']:.{digits}f}</code>
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-📈 <b>ASYMMETRIC TARGETS:</b>
-  • 🛡 <b>TP1 (+1.0R):</b> <code>{sig['tp1']:.{digits}f}</code> ➔ <i>Bank 30% + Move SL to Breakeven!</i>
-  • 🎯 <b>TP2 (+2.5R):</b> <code>{sig['tp2']:.{digits}f}</code> ➔ <i>Bank 40% (+$468.75 Gain)</i>
-  • 🚀 <b>TP3 (+5.0R):</b> <code>{sig['tp3']:.{digits}f}</code> ➔ <i>Hold 30% (+$937.50 Mega-Runner!)</i>
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-🛡 <b>Compliance:</b> FTMO / FundedNext / The5ers Ready
-🌊 <b>Setup:</b> <i>{sig['context']}</i>
-👉 <b>Action:</b> Bot has queued limit order in live shadow tracker!"""
+            # Ultra-Clean, Compact Signal Card
+            msg = f"""💼 <b>{sig['emoji']} {sig['name']} — {sig['dir_tag']} (50% FVG)</b>
+━━━━━━━━━━━━━━━━━━━━
+📍 <b>Entry:</b> <code>{sig['entry']:.{digits}f}</code>
+🛡 <b>Stop Loss:</b> <code>{sig['sl']:.{digits}f}</code>
+🎯 <b>Target (TP2):</b> <code>{sig['tp2']:.{digits}f}</code> (+${(1.0 * 2.5 * 0.4 * risk_dollars + 0.3 * risk_dollars):,.2f})
+📦 <b>Lot Size:</b> <code>{lot_size:.2f} Lots</code> (0.75% Risk ≈ ${risk_dollars:,.2f})
+━━━━━━━━━━━━━━━━━━━━
+<i>Place limit order on MT5. Bot is tracking live!</i>"""
 
             if send_telegram(msg):
                 state["last_signals"][symbol] = bar_key
-                # Add to pending orders for live lifecycle tracking
                 new_order = {
-                    "symbol": symbol,
-                    "name": sig["name"],
-                    "emoji": sig["emoji"],
-                    "direction": sig["direction"],
-                    "direction_emoji": sig["direction_emoji"],
-                    "entry": sig["entry"],
-                    "sl": sig["sl"],
-                    "tp1": sig["tp1"],
-                    "tp2": sig["tp2"],
-                    "tp3": sig["tp3"],
-                    "lot_size": lot_size,
-                    "risk_dollars": risk_dollars,
-                    "digits": digits,
-                    "bar_time": sig["bar_time"],
-                    "created_at": now_str,
-                    "bars_elapsed": 0
+                    "symbol": symbol, "name": sig["name"], "emoji": sig["emoji"],
+                    "direction": sig["direction"], "entry": sig["entry"], "sl": sig["sl"],
+                    "tp1": sig["tp1"], "tp2": sig["tp2"], "tp3": sig["tp3"],
+                    "lot_size": lot_size, "risk_dollars": risk_dollars, "digits": digits,
+                    "bar_time": sig["bar_time"], "created_at": now_str, "bars_elapsed": 0
                 }
                 state["pending_orders"].append(new_order)
                 save_state(state)
-                print(f"✅ [DISPATCHED] {sig['name']} {sig['direction']} Signal sent to VIP Channel & Queued for Live Tracking!")
+                print(f"✅ [DISPATCHED] {sig['name']} {sig['direction']} Clean Signal sent to VIP Channel!")
 
         except Exception as e:
             print(f"❌ [ERROR] Scanning {symbol}: {e}")
