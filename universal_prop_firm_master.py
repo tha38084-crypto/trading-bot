@@ -657,4 +657,27 @@ def run_prop_master():
     print("✅ Radar Scan & In-Place Dashboard Sync Completed!")
 
 if __name__ == "__main__":
-    run_prop_master()
+    if len(sys.argv) > 1 and sys.argv[1].lower() == "--loop":
+        print(f"[INTERACTIVE DAEMON] Universal Prop Master running 24/7 listener...")
+        state = load_state()
+        send_or_update_dashboard(state)
+        last_scan_t = 0
+        while True:
+            try:
+                state = load_state()
+                handle_telegram_updates(state)
+                
+                # Run full market scan every 60 seconds
+                if time.time() - last_scan_t >= 60:
+                    process_live_trades(state)
+                    run_market_scanners(state)
+                    send_or_update_dashboard(state)
+                    last_scan_t = time.time()
+                    
+                time.sleep(2)
+            except KeyboardInterrupt:
+                break
+            except Exception as e:
+                time.sleep(5)
+    else:
+        run_prop_master()
