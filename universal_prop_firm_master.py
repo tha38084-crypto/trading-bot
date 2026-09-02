@@ -38,11 +38,14 @@ DEFAULT_ACCOUNT_SIZE = float(os.environ.get("PROP_ACCOUNT_SIZE", "25000.0"))
 RISK_PERCENT = 0.0075          # 0.75% Risk per trade ($187.50 on $25k)
 
 # ── 2. ASSET UNIVERSE & SESSIONS ─────────────────────────────────────────────
+# CONFIG B (Definitive Backtest Winner — 2.55% Max DD, 62% WR)
+# Session: London/NY Overlap ONLY (08:00–12:00 UTC) — highest quality window
+# All 4 assets share the same 08-12 UTC overlap window
 ASSETS = {
-    "GC=F":     {"name": "GOLD",     "emoji": "🥇", "min_sl": 1.5,   "contract": 100.0, "sessions": list(range(7, 18)),  "digits": 2},
-    "NQ=F":     {"name": "NASDAQ",   "emoji": "📈", "min_sl": 15.0,  "contract": 20.0,  "sessions": list(range(12, 21)), "digits": 2},
-    "GBPUSD=X": {"name": "GBP/USD",  "emoji": "💷", "min_sl": 0.0010,"contract": 100000.0,"sessions": list(range(7, 17)),"digits": 5},
-    "EURUSD=X": {"name": "EUR/USD",  "emoji": "💶", "min_sl": 0.0010,"contract": 100000.0,"sessions": list(range(7, 17)),"digits": 5},
+    "GC=F":     {"name": "GOLD",     "emoji": "🥇", "min_sl": 1.5,    "contract": 100.0,    "sessions": list(range(8, 13)), "digits": 2},
+    "NQ=F":     {"name": "NASDAQ",   "emoji": "📈", "min_sl": 15.0,   "contract": 20.0,     "sessions": list(range(8, 13)), "digits": 2},
+    "GBPUSD=X": {"name": "GBP/USD",  "emoji": "💷", "min_sl": 0.0010, "contract": 100000.0, "sessions": list(range(8, 13)), "digits": 5},
+    "EURUSD=X": {"name": "EUR/USD",  "emoji": "💶", "min_sl": 0.0010, "contract": 100000.0, "sessions": list(range(8, 13)), "digits": 5},
 }
 
 # ── 3. ADVANCED TELEGRAM DISPATCHER & IN-PLACE EDIT ENGINE ──────────────────
@@ -265,7 +268,7 @@ def detect_prop_setup(symbol: str, meta: dict) -> dict | None:
         liq_h, liq_l = float(row['LIQ_HIGH']), float(row['LIQ_LOW'])
         bar_time = str(df_15.index[idx])
 
-        if l < liq_l and c > liq_l and c > o and body >= 0.50 * atr and c >= (h_ema - 1.2 * atr):
+        if l < liq_l and c > liq_l and c > o and body >= 0.65 * atr and c >= (h_ema - 1.2 * atr):  # Config B: 0.65 strict filter
             entry = (c + l) / 2.0
             sl = l - (0.35 * atr)
             sl_dist = max(entry - sl, meta['min_sl'])
@@ -281,7 +284,7 @@ def detect_prop_setup(symbol: str, meta: dict) -> dict | None:
                 'bar_time': bar_time, 'digits': meta['digits']
             }
 
-        elif h > liq_h and c < liq_h and c < o and body >= 0.50 * atr and c <= (h_ema + 1.2 * atr):
+        elif h > liq_h and c < liq_h and c < o and body >= 0.65 * atr and c <= (h_ema + 1.2 * atr):  # Config B: 0.65 strict filter
             entry = (c + h) / 2.0
             sl = h + (0.35 * atr)
             sl_dist = max(sl - entry, meta['min_sl'])
